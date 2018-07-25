@@ -1,10 +1,10 @@
-# Proveth
+# Proveth
 
 Ethereum's design [makes heavy use of](https://blog.ethereum.org/2015/11/15/merkling-in-ethereum/) [Merkle trees](https://en.wikipedia.org/wiki/Merkle_tree) enabling *light clients* to interact with the blockchain without having to download full blocks or its complete state.
 
 Ethereum uses its own variant of Merkle trees, called [Merkle Patricia Tries](https://github.com/ethereum/wiki/wiki/Patricia-Tree), which provide a [dictionary](https://en.wikipedia.org/wiki/Associative_array)-like interface and enable the generation and verification of small proofs (logarithmic in the number of items in the dictionary) that a given key-value-pair is present/absent from the dictionary. Ethereum uses Merkle Patricia Tries to store transactions, transactions receipts, and the *state* (all accounts with their balances, code, and storage).
 
-## Project goals
+## Project goals
 
 Proveth aims to provide
 - a clearly specified format for these proofs;
@@ -19,13 +19,13 @@ We aim to extend this to:
 - proofs of transaction receipt inclusion/exclusion
 - proofs about the Ethereum state
 
-## Contributing
+## Contributing
 
 We welcome contributions. Have a look at any open issues, add more tests/documentation or come up with your own improvements. Before starting work on a large PR, we suggest opening an issue to discuss your approach with the maintainers.
 
 We ❤️ tests & docs, so please write lots of them!
 
-## Authors
+## Authors
 
 Proveth's development was started by the *Submarines* group at the [2018 IC3 Ethereum bootcamp](http://www.initc3.org/events/2018-07-12-IC3-Ethereum-Crypto-Boot-Camp.html):
 - Lorenz Breidenbach
