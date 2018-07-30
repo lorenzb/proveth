@@ -73,7 +73,7 @@ def get_args():
     return parser.parse_args()
 
 
-def rlp_block_header(block_dict: dict):
+def block_header(block_dict: dict):
     b = block.BlockHeader(
         normalize_bytes(block_dict["parentHash"]),
         normalize_bytes(block_dict["sha3Uncles"]),
@@ -92,7 +92,7 @@ def rlp_block_header(block_dict: dict):
         normalize_bytes(block_dict["nonce"]),
     )
     assert(normalize_bytes(block_dict["hash"]) == b.hash)
-    return rlp.encode(b)
+    return b
 
 def rlp_transaction(tx_dict: dict):
     # print(tx_dict)
@@ -158,7 +158,7 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
             else:
                 if MODULE_DEBUG:
                     print("Divergent leaf/extension")
-                stack_indexes.append(0)
+                stack_indexes.append(0xff)
                 stack.append(node)
                 mpt_path += prefix
         else:
@@ -181,8 +181,7 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
     return (mpt_path, stack_indexes, stack)
 
 def generate_proof_blob(block_dict, tx_index):
-    rlp_tx_index = rlp.encode(tx_index)
-    rlp_header = rlp_block_header(block_dict)
+    header = block_header(block_dict)
 
     mpt = HexaryTrie(db={})
     for tx_dict in block_dict["transactions"]:
@@ -191,13 +190,13 @@ def generate_proof_blob(block_dict, tx_index):
 
     assert(mpt.root_hash == normalize_bytes(block_dict['transactionsRoot']))
 
-    mpt_key_nibbles = bytes_to_nibbles(rlp_tx_index)
+    mpt_key_nibbles = bytes_to_nibbles(rlp.encode(tx_index))
     mpt_path, stack_indexes, stack = generate_proof(mpt, mpt_key_nibbles)
 
     proof_blob = rlp.encode([
         1, # proof_type
-        rlp_header,
-        rlp_tx_index,
+        header,
+        tx_index,
         bytes(mpt_path),
         bytes(stack_indexes),
         stack,
