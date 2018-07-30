@@ -27,6 +27,8 @@ We welcome contributions. Have a look at any open issues, add more tests/documen
 
 We ❤️ tests & docs, so please write lots of them!
 
+We follow [PEP-8](https://www.python.org/dev/peps/pep-0008/) for Python and the [official style](http://solidity.readthedocs.io/en/v0.4.24/style-guide.html) for Solidity.
+
 ## Authors
 
 Proveth's development was started by the *Submarines* group at the [2018 IC3 Ethereum bootcamp](http://www.initc3.org/events/2018-07-12-IC3-Ethereum-Crypto-Boot-Camp.html):
