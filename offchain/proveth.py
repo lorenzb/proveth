@@ -23,7 +23,6 @@ from trie.constants import (
 )
 from trie.utils.nodes import *
 from trie.utils.nibbles import encode_nibbles, decode_nibbles, bytes_to_nibbles
-from web3 import Web3
 
 MODULE_DEBUG = False
 
