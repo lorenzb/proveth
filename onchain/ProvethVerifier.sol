@@ -7,6 +7,8 @@ contract ProvethVerifier {
     using RLP for RLP.Iterator;
     using RLP for bytes;
 
+    uint256 constant TX_ROOT_HASH_INDEX = 4;
+
     struct Transaction {
         uint256 nonce;
         uint256 gasprice;
@@ -129,7 +131,9 @@ contract ProvethVerifier {
     struct Proof {
         uint256 kind;
         bytes rlpBlockHeader;
-        bytes mptKey;
+        bytes32 txRootHash;
+        bytes rlpTxIndex;
+        uint txIndex;
         bytes mptPath;
         bytes stackIndexes;
         RLP.RLPItem[] stack;
@@ -139,8 +143,10 @@ contract ProvethVerifier {
         RLP.RLPItem[] memory proofFields = proofBlob.toRLPItem().toList();
         proof = Proof(
             proofFields[0].toUint(),
-            proofFields[1].toData(),
-            proofFields[2].toData(),
+            proofFields[1].toBytes(),
+            proofFields[1].toList()[TX_ROOT_HASH_INDEX].toBytes32(),
+            proofFields[2].toBytes(),
+            proofFields[2].toUint(),
             proofFields[3].toData(),
             proofFields[4].toData(),
             proofFields[5].toList()
@@ -180,8 +186,6 @@ contract ProvethVerifier {
         s = t.s;
     }
 
-    uint256 constant TX_ROOT_HASH_INDEX = 4;
-
     function validateTxProof(
         bytes32 blockHash,
         bytes proofBlob
@@ -200,20 +204,19 @@ contract ProvethVerifier {
 
         // TODO(lorenzb): Validate structure of indexes, e.g. last index == 2 if we have a Leaf, etc...
 
-        bytes32 txRootHash = proof.rlpBlockHeader.toRLPItem().toList()[TX_ROOT_HASH_INDEX].toBytes32();
         bool valid;
         bytes memory rlpTx;
-        (valid, rlpTx) = validateMPTProof(txRootHash, proof.mptPath, proof.stackIndexes, proof.stack);
+        (valid, rlpTx) = validateMPTProof(proof.txRootHash, proof.mptPath, proof.stackIndexes, proof.stack);
         if (!valid) {
             return;
         }
 
-        bytes memory mptKeyNibbles = decodeNibbles(proof.mptKey, 0);
+        bytes memory mptKeyNibbles = decodeNibbles(proof.rlpTxIndex, 0);
         if (rlpTx.length == 0) {
             // empty node
             if (isPrefix(proof.mptPath, mptKeyNibbles)) {
                 result = TX_PROOF_RESULT_ABSENT;
-                index = proof.mptKey.toRLPItem().toUint();
+                index = proof.txIndex;
                 return;
             } else {
                 return;
@@ -222,7 +225,7 @@ contract ProvethVerifier {
             // tx
             if (isPrefix(proof.mptPath, mptKeyNibbles) && proof.mptPath.length == mptKeyNibbles.length) {
                 result = TX_PROOF_RESULT_PRESENT;
-                index = proof.mptKey.toRLPItem().toUint();
+                index = proof.txIndex;
                 t = decodeTx(rlpTx);
                 return;
             } else {
