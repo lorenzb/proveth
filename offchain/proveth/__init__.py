@@ -1,3 +1,5 @@
+name = "proveth"
+
 import argparse
 import json
 import sys
