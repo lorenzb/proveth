@@ -11,7 +11,7 @@ Ethereum uses its own variant of Merkle trees, called [Merkle Patricia Tries](ht
 ## Project goals
 
 Proveth aims to provide
-- a clearly specified format for these proofs;
+- a [clearly specified format for these proofs](specification.md);
 - a high-quality off-chain proof generator that can connect to an Ethereum node and generate such proofs;
 - a high-quality on-chain proof verifier (smart contract) that can verify a proof that a given transaction/state item/... is indeed part of the Ethereum blockchain.
 
