@@ -3,10 +3,13 @@
 #### Table of Contents
 
 * [Proof kind](#proof-kind)
-* [Proof of transaction inclusion/exclusion](#proof-of-transaction-inclusion-exclusion)
+* [Proof of transaction inclusion/exclusion](#proof-of-transaction-inclusionexclusion)
   * [Examples](#examples)
+    * [Transaction 0 of block 5000000 (mainnet)](#transaction-0-of-block-5000000-mainnet)
+    * [Transaction 109 of block 5000000 (mainnet)](#transaction-109-of-block-5000000-mainnet)
+    * [Transaction 6000 of block 6027762 (mainnet)](#transaction-6000-of-block-6027762-mainnet)
 
-<hr>
+----
 
 ## Proof kind
 
@@ -49,7 +52,7 @@ A proof consists of 6 elements:
 
 For better readability, we hex-encode all bytestrings in the examples below.
 
-**Transaction 0 of block 5000000 (mainnet)**
+#### Transaction 0 of block 5000000 (mainnet)
 
 This is proof-blob for transaction 0 of block 5000000 on the mainnet:
 ```
@@ -68,8 +71,8 @@ When we RLP-decode it, we get the following:
   # Merkle-Patricia-Trie path, split_nibbles(rlp_encode(0)) = split_nibbles(0x80) = 0x0800
   '0800',
   # Node indexes into the nodes list (next element of this list):
-  # the 8th element of the first node is '12e7ff44f271d1f5968b23a258b21f703cacfe3061e0fafe9ea04b810537a606', which is the hash of the second node
-  # the 1st element of the second node is 'f86f820fef851f3305...6377779eb60656a9', which is the rlp-encoded transaction
+  # the 8th element of the initial node is '12e7ff44f271d1f5968b23a258b21f703cacfe3061e0fafe9ea04b810537a606', which is the hash of the following node
+  # the 1st element of the following node is 'f86f820fef851f3305...6377779eb60656a9', which is the rlp-encoded transaction
   '0801',
   # Merkle-Patricia-Trie nodes on path to transaction
   [
@@ -81,7 +84,7 @@ When we RLP-decode it, we get the following:
 ]
 ```
 
-**Transaction 109 of block 5000000 (mainnet)**
+#### Transaction 109 of block 5000000 (mainnet)
 
 This is a proof of exclusion since no transaction with index 109 exists in block 5000000. Proof-blob:
 ```
@@ -113,7 +116,7 @@ RLP-decoded proof-blob:
 ]
 ```
 
-**Transaction 6000 of block 6027762 (mainnet)**
+#### Transaction 6000 of block 6027762 (mainnet)
 
 This is a proof of exclusion since no transaction with index 6000 exists in block 6027762. Proof-blob:
 ```
