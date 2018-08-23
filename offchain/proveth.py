@@ -158,7 +158,7 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
             else:
                 if MODULE_DEBUG:
                     print("Divergent leaf/extension")
-                stack_indexes.append(0)
+                stack_indexes.append(0xff)
                 stack.append(node)
                 mpt_path += prefix
         else:

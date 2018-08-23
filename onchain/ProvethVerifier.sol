@@ -267,10 +267,6 @@ contract ProvethVerifier {
         }
 
         for (uint i = 0; i < stack.length; i++) {
-            if (stackIndexes[i] > 16) {
-                // a valid proof will never have a stack index > 16
-                return;
-            }
 
             // We use the fact that an rlp encoded list consists of some
             // encoding of its length plus the concatenation of its
@@ -291,7 +287,7 @@ contract ProvethVerifier {
                 uint prefixLength = sharedPrefixLength(mptPathOffset, mptPath, nodePath);
                 mptPathOffset += prefixLength;
 
-                if (stackIndexes[i] == 0) {
+                if (stackIndexes[i] == 0xff) {
                     // proof claims divergent extension or leaf
 
                     if (i < stack.length - 1) {
@@ -366,7 +362,7 @@ contract ProvethVerifier {
 
                         return (true, new bytes(0));
                     }
-                } else { // we want the value stored in this node
+                } else if (stackIndexes[i] == 16) { // we want the value stored in this node
                     if (i < stack.length - 1) {
                         // value must come last in proof
                         return;
@@ -379,6 +375,8 @@ contract ProvethVerifier {
 
                     rlpValue = node[uint(stackIndexes[i])];
                     return (true, rlpValue.toData());
+                } else {
+                    throw;
                 }
             } else {
                 throw;   // This should never happen as we have
