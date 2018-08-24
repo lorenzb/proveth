@@ -63,13 +63,17 @@ def get_args():
         description="Help",
         formatter_class=argparse.RawTextHelpFormatter)
     # TODO add stuff around adding a block header and then generating proofs of inclusion / exclusion etc etc etc
-    parser.add_argument('-b', '--block-hash', required=True,
+    blockInfoGroup = parser.add_mutually_exclusive_group(required=True)
+    blockInfoGroup.add_argument('-b', '--block-number',
+                        default="", help="Block number that transaction exists in")
+    blockInfoGroup.add_argument('-bh', '--block-hash',
                         default="", help="Block hash that transaction exists in")
     parser.add_argument('-i', '--transaction-index', required=True, type=int,
                         default="", help="Zero-based index of the transaction in the block "
                                          "(e.g. the third transaction in the block is at index 2)")
     parser.add_argument('-r', '--rpc', required=True,
                         default="", help="URL of web3 rpc node. (e.g. http://localhost:8545)")
+    parser.add_argument('-v', '--verbose', required=False, action='store_true', help="Print verbose output")
     return parser.parse_args()
 
 
@@ -205,18 +209,36 @@ def generate_proof_blob(block_dict, tx_index):
     return proof_blob
 
 def generate_proof_blob_from_jsonrpc_response(response, tx_index):
+    if MODULE_DEBUG:
+        print(response)
     assert(response['jsonrpc'] == '2.0')
     assert('id' in response)
+    assert('result' in response)
     return generate_proof_blob(response['result'], tx_index)
 
 
-def generate_proof_blob_from_jsonrpc(url, block_hash, tx_index):
+def generate_proof_blob_from_jsonrpc_using_hash(url, block_hash, tx_index):
     request = {
         "jsonrpc":"2.0",
         "method":"eth_getBlockByHash",
         "params":['0x' + utils.encode_hex(block_hash), True],
         "id":1,
     }
+    if MODULE_DEBUG:
+        print(request)
+    r = requests.post(url, json=request)
+    r.raise_for_status()
+    return generate_proof_blob_from_jsonrpc_response(r.json(), tx_index)
+
+def generate_proof_blob_from_jsonrpc_using_number(url, block_number, tx_index):
+    request = {
+        "jsonrpc":"2.0",
+        "method":"eth_getBlockByNumber",
+        "params":[str(hex(block_number)), True],
+        "id":1,
+    }
+    if MODULE_DEBUG:
+        print(request)
     r = requests.post(url, json=request)
     r.raise_for_status()
     return generate_proof_blob_from_jsonrpc_response(r.json(), tx_index)
@@ -224,8 +246,17 @@ def generate_proof_blob_from_jsonrpc(url, block_hash, tx_index):
 
 def main():
     args = get_args()
+    if args.verbose:
+        global MODULE_DEBUG
+        MODULE_DEBUG = True
 
-    proof_blob = generate_proof_blob_from_jsonrpc(args.rpc, utils.decode_hex(args.block_hash), args.transaction_index)
+    if args.block_hash:
+        proof_blob = generate_proof_blob_from_jsonrpc_using_hash(args.rpc, utils.decode_hex(args.block_hash), args.transaction_index)
+    elif args.block_number:
+        proof_blob = generate_proof_blob_from_jsonrpc_using_number(args.rpc, int(args.block_number), args.transaction_index)
+    else:
+        print("Error Occurred Trying to Parse Arguments")
+        exit(1)
 
     print("Final Output: ")
     print(rec_hex(proof_blob))
