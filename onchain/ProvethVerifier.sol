@@ -96,7 +96,7 @@ contract ProvethVerifier {
             skipNibbles = 1;
         } else {
             // Not supposed to happen!
-            require(false);
+            revert();
         }
         return decodeNibbles(compact, skipNibbles);
     }
@@ -149,9 +149,9 @@ contract ProvethVerifier {
         );
     }
 
-    uint8 constant public TX_PROOF_RESULT_INVALID = 0;
     uint8 constant public TX_PROOF_RESULT_PRESENT = 1;
     uint8 constant public TX_PROOF_RESULT_ABSENT = 2;
+
     function txProof(
         bytes32 blockHash,
         bytes proofBlob
@@ -186,26 +186,19 @@ contract ProvethVerifier {
         bytes32 blockHash,
         bytes proofBlob
     ) internal returns (uint8 result, uint256 index, Transaction memory t) {
-        result = TX_PROOF_RESULT_INVALID;
+        result = 0;
         index = 0;
         Proof memory proof = decodeProofBlob(proofBlob);
         require(proof.stack.length == proof.stackIndexes.length);
         if (proof.kind != 1) {
-            return;
+            revert();
         }
 
         if (keccak256(proof.rlpBlockHeader) != blockHash) {
-            return;
+            revert();
         }
 
-        // TODO(lorenzb): Validate structure of indexes, e.g. last index == 2 if we have a Leaf, etc...
-
-        bool valid;
-        bytes memory rlpTx;
-        (valid, rlpTx) = validateMPTProof(proof.txRootHash, proof.mptPath, proof.stackIndexes, proof.stack);
-        if (!valid) {
-            return;
-        }
+        bytes memory rlpTx = validateMPTProof(proof.txRootHash, proof.mptPath, proof.stackIndexes, proof.stack);
 
         bytes memory mptKeyNibbles = decodeNibbles(proof.rlpTxIndex, 0);
         if (rlpTx.length == 0) {
@@ -215,7 +208,7 @@ contract ProvethVerifier {
                 index = proof.txIndex;
                 return;
             } else {
-                return;
+                revert();
             }
         } else {
             // tx
@@ -225,7 +218,7 @@ contract ProvethVerifier {
                 t = decodeTx(rlpTx);
                 return;
             } else {
-                return;
+                revert();
             }
         }
     }
@@ -243,10 +236,9 @@ contract ProvethVerifier {
         bytes mptPath,
         bytes stackIndexes,
         RLP.RLPItem[] memory stack
-    ) internal returns (bool valid, bytes memory value) {
+    ) internal returns (bytes memory value) {
         assert(stackIndexes.length == stack.length);
 
-        valid = false;
         uint mptPathOffset = 0;
 
         bytes32 nodeHashHash;
@@ -257,9 +249,8 @@ contract ProvethVerifier {
 
         if (stack.length == 0) {
             // Root hash of empty tx trie
-            valid = (rootHash == 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421);
-            value = new bytes(0);
-            return;
+            require(rootHash == 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421);
+            return new bytes(0);
         }
 
         for (uint i = 0; i < stack.length; i++) {
@@ -269,10 +260,10 @@ contract ProvethVerifier {
             // *rlp-encoded* items.
             rlpNode = stack[i].toBytes();
             if (i == 0 && rootHash != keccak256(rlpNode)) {
-                return;
+                revert();
             }
             if (i != 0 && nodeHashHash != mptHashHash(rlpNode)) {
-                return;
+                revert();
             }
             node = stack[i].toList();
 
@@ -288,24 +279,24 @@ contract ProvethVerifier {
 
                     if (i < stack.length - 1) {
                         // divergent node must come last in proof
-                        return;
+                        revert();
                     }
 
                     if (prefixLength == nodePath.length) {
                         // node isn't divergent
-                        return;
+                        revert();
                     }
 
                     if (mptPathOffset != mptPath.length) {
                         // didn't consume entire mptPath
-                        return;
+                        revert();
                     }
 
-                    return (true, new bytes(0));
+                    return new bytes(0);
                 } else if (stackIndexes[i] == 1) {
                     if (prefixLength != nodePath.length) {
                         // node is divergent
-                        return;
+                        revert();
                     }
 
                     if (i < stack.length - 1) {
@@ -318,22 +309,22 @@ contract ProvethVerifier {
                     } else {
                         // didn't consume entire mptPath
                         if (mptPathOffset != mptPath.length) {
-                            return;
+                            revert();
                         }
 
                         rlpValue = node[uint(stackIndexes[i])];
-                        return (true, rlpValue.toData());
+                        return rlpValue.toData();
                     }
                 } else {
                     // an extension/leaf node only has two fields.
-                    return;
+                    revert();
                 }
             } else if (node.length == 17) {
                 // Branch node
                 if (stackIndexes[i] < 16) {
                     // advance mptPathOffset
                     if (mptPathOffset >= mptPath.length || mptPath[mptPathOffset] != stackIndexes[i]) {
-                        return;
+                        revert();
                     }
                     mptPathOffset += 1;
 
@@ -348,39 +339,39 @@ contract ProvethVerifier {
                         // last level
                         // must have an empty hash, everything else is invalid
                         if (node[uint(stackIndexes[i])].toData().length != 0) {
-                            return;
+                            revert();
                         }
 
                         if (mptPathOffset != mptPath.length) {
                             // didn't consume entire mptPath
-                            return;
+                            revert();
                         }
 
-                        return (true, new bytes(0));
+                        return new bytes(0);
                     }
                 } else if (stackIndexes[i] == 16) { // we want the value stored in this node
                     if (i < stack.length - 1) {
                         // value must come last in proof
-                        return;
+                        revert();
                     }
 
                     if (mptPathOffset != mptPath.length) {
                         // didn't consume entire mptPath
-                        return;
+                        revert();
                     }
 
                     rlpValue = node[uint(stackIndexes[i])];
-                    return (true, rlpValue.toData());
+                    return rlpValue.toData();
                 } else {
-                    throw;
+                    revert();
                 }
             } else {
-                throw;   // This should never happen as we have
-                         // already authenticated node at this point.
+                revert(); // This should never happen as we have
+                          // already authenticated node at this point.
             }
         }
 
         // We should never reach this point.
-        throw;
+        revert();
     }
 }
