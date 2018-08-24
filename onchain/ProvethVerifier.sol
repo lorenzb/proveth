@@ -237,7 +237,7 @@ contract ProvethVerifier {
         bytes stackIndexes,
         RLP.RLPItem[] memory stack
     ) internal returns (bytes memory value) {
-        assert(stackIndexes.length == stack.length);
+        require(stackIndexes.length == stack.length);
 
         uint mptPathOffset = 0;
 
