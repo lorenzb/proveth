@@ -60,7 +60,7 @@ contract ProvethVerifier {
         );
     }
 
-    function decodeNibbles(bytes compact, uint skipNibbles) returns (bytes memory nibbles) {
+    function decodeNibbles(bytes compact, uint skipNibbles) internal returns (bytes memory nibbles) {
         require(compact.length > 0);
 
         uint length = compact.length * 2;
@@ -82,7 +82,7 @@ contract ProvethVerifier {
         assert(nibblesLength == nibbles.length);
     }
 
-    function merklePatriciaCompactDecode(bytes compact) returns (bytes memory nibbles) {
+    function merklePatriciaCompactDecode(bytes compact) internal returns (bytes memory nibbles) {
         require(compact.length > 0);
         uint first_nibble = uint8(compact[0]) >> 4 & 0xF;
         uint skipNibbles;
@@ -101,11 +101,7 @@ contract ProvethVerifier {
         return decodeNibbles(compact, skipNibbles);
     }
 
-    function exposeMerklePatriciaCompactDecode(bytes compact) returns (bytes nibbles) {
-        return merklePatriciaCompactDecode(compact);
-    }
-
-    function isPrefix(bytes prefix, bytes full) returns (bool) {
+    function isPrefix(bytes prefix, bytes full) internal returns (bool) {
         if (prefix.length > full.length) {
             return false;
         }
@@ -119,7 +115,7 @@ contract ProvethVerifier {
         return true;
     }
 
-    function sharedPrefixLength(uint xsOffset, bytes xs, bytes ys) returns (uint) {
+    function sharedPrefixLength(uint xsOffset, bytes xs, bytes ys) internal returns (uint) {
         for (uint i = 0; i + xsOffset < xs.length && i < ys.length; i++) {
             if (xs[i + xsOffset] != ys[i]) {
                 return i;
