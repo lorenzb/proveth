@@ -13,9 +13,12 @@
 
 Throughout this document, we will use zero-based indexing and refer to the initial element of a sequence as the zeroth element.
 
+We also assume that you're somewhat familiar with Ethereum's [RLP encoding](https://github.com/ethereum/wiki/wiki/RLP) and
+[Merkle-Patricia-Tries](https://github.com/ethereum/wiki/wiki/Patricia-Tree).
+
 ## Proof kind
 
-Every proveth proof-blob is an [RLP-encoded](https://github.com/ethereum/wiki/wiki/RLP) list.
+Every proveth proof-blob is an RLP-encoded list.
 The zeroth element of the list is a uint that specifies the *kind* of proof the proof-blob represents:
 ```
 [kind, actual proof...]
