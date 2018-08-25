@@ -11,10 +11,12 @@
 
 ----
 
+Throughout this document, we will use zero-based indexing and refer to the initial element of a sequence as the zeroth element.
+
 ## Proof kind
 
 Every proveth proof-blob is an [RLP-encoded](https://github.com/ethereum/wiki/wiki/RLP) list.
-The initial element of the list is a uint that specifies the *kind* of proof the proof-blob represents:
+The zeroth element of the list is a uint that specifies the *kind* of proof the proof-blob represents:
 ```
 [kind, actual proof...]
 ```
@@ -43,7 +45,7 @@ A proof consists of 6 elements:
     <mix hash>,
     <nonce>]
    ```
-- 2: *transaction index* (zero-based)
+- 2: *transaction index* (zero-based, i.e. the initial transaction in the block has index 0)
 - 3: *Merkle-Patricia-Trie path*. Since Merkle-Patricia-Tries are hexary, each element of the path is in the interval `[0;15]`. For a proof of inclusion, the path is the RLP-encoded transaction index split into nibbles. For a proof of exclusion, the path is the longest prefix of the RLP-encoded transaction index split into nibbles that is present as a path in the tree.
 - 4: indexes into (5) that should be used during verification. A special index of `0xff` is used for divergent extension or leaf nodes.
 - 5: *Merkle-Patricia-Trie nodes* on the path to the transaction. Each node is a list of length 2 (for *extension* and *leaf* nodes) or a list of length 17 (for *branch* nodes).
@@ -71,8 +73,8 @@ When we RLP-decode it, we get the following:
   # Merkle-Patricia-Trie path, split_nibbles(rlp_encode(0)) = split_nibbles(0x80) = 0x0800
   '0800',
   # Node indexes into the nodes list (next element of this list):
-  # the 8th element of the initial node is '12e7ff44f271d1f5968b23a258b21f703cacfe3061e0fafe9ea04b810537a606', which is the hash of the following node
-  # the 1st element of the following node is 'f86f820fef851f3305...6377779eb60656a9', which is the rlp-encoded transaction
+  # the 8th element of the zeroth node is '12e7ff44f271d1f5968b23a258b21f703cacfe3061e0fafe9ea04b810537a606', which is the hash of the first node
+  # the 1st element of the first node is 'f86f820fef851f3305...6377779eb60656a9', which is the rlp-encoded transaction
   '0801',
   # Merkle-Patricia-Trie nodes on path to transaction
   [
@@ -104,8 +106,8 @@ RLP-decoded proof-blob:
   # Merkle-Patricia-Trie path, split_nibbles(rlp_encode(0x6d)) = split_nibbles(0x6d) = 0x060d
   '060d',
   # Node indexes into the nodes list (next element of this list):
-  # the 6th element of the intial node is '12e7ff44f271d1f5968b23a258b21f703cacfe3061e0fafe9ea04b810537a606', which is the hash of the second node
-  # the 13th element of the following node is '', which indicates that the node has no child in this position.
+  # the 6th element of the zeroth node is '12e7ff44f271d1f5968b23a258b21f703cacfe3061e0fafe9ea04b810537a606', which is the hash of the first node
+  # the 13th element of the first node is '', which indicates that the node has no child in this position.
   # Hence there is no transaction with index 0x6d.
   '060d',
   [
@@ -137,9 +139,9 @@ RLP-decoded proof-blob:
   # split_nibbles(rlp_encode(0x1770)) = split_nibbles(821770) = 080201070700
   '0802',
   # Node indexes into the nodes list (next element of this list):
-  # the 8th element of the intial node is '1acb734cb4301016fd8bd7e19cecf0ef6fd30d7f001404e690c847c0872b3f9e', which is the hash of the following node
-  # the 2nd element of the following node is 'c0658d28f3e6f71e6d59b14cde67919cff0ed7908b3af848bec2eaaeb76ae29a', which is the hash of the following node
-  # the followind node is an extension node with path [0,1], proving that no transaction exists at 080201070700.
+  # the 8th element of the zeroth node is '1acb734cb4301016fd8bd7e19cecf0ef6fd30d7f001404e690c847c0872b3f9e', which is the hash of the first node
+  # the 2nd element of the first node is 'c0658d28f3e6f71e6d59b14cde67919cff0ed7908b3af848bec2eaaeb76ae29a', which is the hash of the second node
+  # the second node is an extension node with path [0,1], proving that no transaction exists at 080201070700.
   # the special index 'ff' indicates that this extension node diverges from the desired path 080201070700.
   '0802ff',
   [
