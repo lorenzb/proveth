@@ -255,7 +255,7 @@ def main():
     elif args.block_number:
         proof_blob = generate_proof_blob_from_jsonrpc_using_number(args.rpc, int(args.block_number), args.transaction_index)
     else:
-        print("Error Occurred Trying to Parse Arguments")
+        print("Either --block-hash or --block-number are required")
         exit(1)
 
     print("Final Output: ")
