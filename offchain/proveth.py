@@ -64,9 +64,9 @@ def get_args():
         formatter_class=argparse.RawTextHelpFormatter)
     # TODO add stuff around adding a block header and then generating proofs of inclusion / exclusion etc etc etc
     blockInfoGroup = parser.add_mutually_exclusive_group(required=True)
-    blockInfoGroup.add_argument('-b', '--block-number',
+    blockInfoGroup.add_argument('-n', '--block-number',
                         default="", help="Block number that transaction exists in")
-    blockInfoGroup.add_argument('-bh', '--block-hash',
+    blockInfoGroup.add_argument('-b', '--block-hash',
                         default="", help="Block hash that transaction exists in")
     parser.add_argument('-i', '--transaction-index', required=True, type=int,
                         default="", help="Zero-based index of the transaction in the block "
