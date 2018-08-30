@@ -60,7 +60,7 @@ def normalize_bytes(hash):
 
 def get_args():
     parser = argparse.ArgumentParser(
-        description="Help",
+        description="Patricia Merkle Trie Proof Generating Tool",
         formatter_class=argparse.RawTextHelpFormatter)
     # TODO add stuff around adding a block header and then generating proofs of inclusion / exclusion etc etc etc
     blockInfoGroup = parser.add_mutually_exclusive_group(required=True)
