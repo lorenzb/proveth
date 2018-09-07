@@ -95,11 +95,11 @@ def block_header(block_dict: dict):
         normalize_bytes(block_dict["mixHash"]),
         normalize_bytes(block_dict["nonce"]),
     )
-    assert(normalize_bytes(block_dict["hash"]) == b.hash)
+    if normalize_bytes(block_dict["hash"]) != b.hash:
+        raise ValueError("Blockhash does not match. Received invalid block header?")
     return b
 
 def rlp_transaction(tx_dict: dict):
-    # print(tx_dict)
     t = transactions.Transaction(
         utils.parse_as_int(tx_dict['nonce']),
         utils.parse_as_int(tx_dict['gasPrice']),
@@ -111,12 +111,14 @@ def rlp_transaction(tx_dict: dict):
         utils.bytes_to_int(normalize_bytes(tx_dict['r'])),
         utils.bytes_to_int(normalize_bytes(tx_dict['s'])),
     )
-    assert(normalize_bytes(tx_dict['hash']) == t.hash)
+    if normalize_bytes(tx_dict['hash']) != t.hash:
+        raise ValueError("Tx hash does not match. Received invalid transaction?")
     return rlp.encode(t)
 
 
 def generate_proof(mpt, mpt_key_nibbles: bytes):
-    assert(all(elem < 16 for elem in mpt_key_nibbles))
+    if not all(nibble < 16 for nibble in mpt_key_nibbles):
+        raise ValueError("mpt_key_nibbles has non-nibble elements")
     EMPTY = 128
     stack_indexes = []
     mpt_path = []
@@ -127,7 +129,6 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
         nonlocal mpt_path
         nonlocal stack
 
-        assert(all(nibble < 16 for nibble in mpt_key_nibbles))
         node = mpt.get_node(node_hash)
         if get_node_type(node) == NODE_TYPE_BLANK:
             if MODULE_DEBUG:
@@ -166,7 +167,7 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
                 stack.append(node)
                 mpt_path += prefix
         else:
-            assert(False)
+            raise ValueError("Unknown node type: {}".format(get_node_type(node)))
 
 
     root_node = mpt.get_node(mpt.root_hash)
@@ -192,7 +193,8 @@ def generate_proof_blob(block_dict, tx_index):
         key = rlp.encode(utils.parse_as_int(tx_dict['transactionIndex']))
         mpt.set(key, rlp_transaction(tx_dict))
 
-    assert(mpt.root_hash == normalize_bytes(block_dict['transactionsRoot']))
+    if mpt.root_hash != normalize_bytes(block_dict['transactionsRoot']):
+        raise ValueError("Tx trie root hash does not match.")
 
     mpt_key_nibbles = bytes_to_nibbles(rlp.encode(tx_index))
     mpt_path, stack_indexes, stack = generate_proof(mpt, mpt_key_nibbles)
@@ -210,9 +212,9 @@ def generate_proof_blob(block_dict, tx_index):
 def generate_proof_blob_from_jsonrpc_response(response, tx_index):
     if MODULE_DEBUG:
         print(response)
-    assert(response['jsonrpc'] == '2.0')
-    assert('id' in response)
-    assert('result' in response)
+    assert response['jsonrpc'] == '2.0'
+    assert 'id' in response
+    assert 'result' in response
     return generate_proof_blob(response['result'], tx_index)
 
 
