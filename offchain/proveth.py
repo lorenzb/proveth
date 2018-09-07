@@ -251,12 +251,12 @@ def main():
         global MODULE_DEBUG
         MODULE_DEBUG = True
 
-    if args.block_hash and not args.block_number:
+    if args.block_hash:
         proof_blob = generate_proof_blob_from_jsonrpc_using_hash(args.rpc, utils.decode_hex(args.block_hash), args.transaction_index)
-    elif not args.block_hash and args.block_number:
+    elif args.block_number:
         proof_blob = generate_proof_blob_from_jsonrpc_using_number(args.rpc, int(args.block_number), args.transaction_index)
     else:
-        print("Exactly one of --block-hash or --block-number are required")
+        print("Either --block-hash or --block-number are required")
         exit(1)
 
     print("Final Output: ")
