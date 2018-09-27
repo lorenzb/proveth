@@ -1,4 +1,5 @@
 import collections
+import copy
 import json
 import os
 import sys
@@ -123,17 +124,94 @@ class TestVerifier(unittest.TestCase):
             utils.decode_hex('0f010c0b08'),
             self.verifier_contract.exposedMerklePatriciaCompactDecode(utils.decode_hex('3f1cb8')))
 
-
     def test_manual1(self):
         # from block 1322230 on ropsten
-        proof_blob = utils.decode_hex('f903be01f90217a05b5782c32df715c083da95b805959d4718ec698915a4b0288e325aa346436be1a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d4934794fee3a49dc4243fa92019fc4331228043b3c5e825a013a50145091c1b5bae07abe10da88c54c5111c3fbb74fc91074ad2ffec311f6ba00c673fc4822ba97cc737cfa7a839d6f6f755deedb1506490911f710bfa9315bfa00c1fcb2441331ab1abc2e174a7293acce160d0b04f35a4b791bf89e9fd452b10b9010000000000000000200000000000000000000000000010002000000000000000000040000000000000000000000010000000000000000000000040000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000100840c0b580c83142cf68347e7c4830428a184596e599f99d883010606846765746887676f312e382e338664617277696ea06ebda3617b113ba6550d08cb34119f940ddb96b509c62b7d0a8420722329d5b48861ebb9e58c93ac260182000183000101f90198f851a0da42945ae3c75118e89abff39ad566fd0a30b574e5df8ae70ce59d4cc5f19cb180808080808080a0ca85a0d0ed219e8583feadf2dce0a73aa05e7d6a790c32efcc1dd6c901195f168080808080808080f8b180a0e61bb422a77353192ae2b4b29c3773b018da71d1425b2a48cca04d7da9917faba06b46aad90e0a9eeede8f2ad992401e52b3e52ce7d5bf723a48922401d5af95cca0997f63912b72cdf8a907025644e1df51c313015c4e9e51500fa6ffa52241eef4a05ad4d0c46a043da4e1da601955a1d29d5bd3b6c5b2dfc2776c8a898f998af498a0457048648440cf69193e770035a2df6f42ab5a6b8bc4d789a92074dc2beb20918080808080808080808080f89020b88df88b820beb8506fc23ac00832dd5d8943d04303126cd6e75324825455685b028401e0ec280a4e733ca974e6964610000000000000000000000000000000000000000000000000000000029a0f5405ffd54b78fc27dc56c49364ec22ba94c471f4639f052cfe324e3fc05d1d3a041291d64a8cdf499c386fde5bc04a1ca743aa81f65dc59198d29f8d66ee588a5')
+        decoded_proof_blob = [
+            '01',
+            [
+                '5b5782c32df715c083da95b805959d4718ec698915a4b0288e325aa346436be1',
+                '1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347',
+                'fee3a49dc4243fa92019fc4331228043b3c5e825',
+                '13a50145091c1b5bae07abe10da88c54c5111c3fbb74fc91074ad2ffec311f6b',
+                '0c673fc4822ba97cc737cfa7a839d6f6f755deedb1506490911f710bfa9315bf',
+                '0c1fcb2441331ab1abc2e174a7293acce160d0b04f35a4b791bf89e9fd452b10',
+                '00000000000000200000000000000000000000000010002000000000000000000040000000000000000000000010000000000000000000000040000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000100',
+                '0c0b580c',
+                '142cf6',
+                '47e7c4',
+                '0428a1',
+                '596e599f',
+                'd883010606846765746887676f312e382e338664617277696e',
+                '6ebda3617b113ba6550d08cb34119f940ddb96b509c62b7d0a8420722329d5b4',
+                '61ebb9e58c93ac26',
+            ],
+            '01',
+            '0001',
+            '000101',
+            [
+                ['da42945ae3c75118e89abff39ad566fd0a30b574e5df8ae70ce59d4cc5f19cb1', '', '', '', '', '', '', '', 'ca85a0d0ed219e8583feadf2dce0a73aa05e7d6a790c32efcc1dd6c901195f16', '', '', '', '', '', '', '', ''],
+                ['', 'e61bb422a77353192ae2b4b29c3773b018da71d1425b2a48cca04d7da9917fab', '6b46aad90e0a9eeede8f2ad992401e52b3e52ce7d5bf723a48922401d5af95cc', '997f63912b72cdf8a907025644e1df51c313015c4e9e51500fa6ffa52241eef4', '5ad4d0c46a043da4e1da601955a1d29d5bd3b6c5b2dfc2776c8a898f998af498', '457048648440cf69193e770035a2df6f42ab5a6b8bc4d789a92074dc2beb2091', '', '', '', '', '', '', '', '', '', '', ''],
+                ['20', 'f88b820beb8506fc23ac00832dd5d8943d04303126cd6e75324825455685b028401e0ec280a4e733ca974e6964610000000000000000000000000000000000000000000000000000000029a0f5405ffd54b78fc27dc56c49364ec22ba94c471f4639f052cfe324e3fc05d1d3a041291d64a8cdf499c386fde5bc04a1ca743aa81f65dc59198d29f8d66ee588a5'],
+            ],
+        ]
         block_hash = utils.decode_hex('51c92d45e39db17e43f0f7333de44c592b504bb8ac24dc3c39135d46655bae4f')
         result, index, nonce, gas_price, gas, to, value, data, v, r, s = self.verifier_contract.txProof(
             block_hash,
-            proof_blob,
+            rlp.encode(rec_bin(decoded_proof_blob)),
             startgas=10**6)
         self.assertEqual(result, self.verifier_contract.TX_PROOF_RESULT_PRESENT())
         self.assertEqual(index, 1)
+
+        def assert_failed_call(modified_decoded_proof_blob, block_hash=block_hash):
+            with self.assertRaises(t.TransactionFailed):
+                _ = self.verifier_contract.txProof(
+                    block_hash,
+                    rlp.encode(rec_bin(modified_decoded_proof_blob)),
+                    startgas=10**6)
+
+        assert_failed_call(decoded_proof_blob, block_hash=utils.decode_hex('51c92d45e39db17e43f0f7333de44c592b504bb8ac24dc3c39135d46655bae40'))
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[0] = 'ab'
+        assert_failed_call(modified_decoded_proof_blob)
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[1][0] = '5b5782c32df715c083da95b805959d4718ec698915a4b0288e325aa346436be2'
+        assert_failed_call(modified_decoded_proof_blob)
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[2] = '02'
+        assert_failed_call(modified_decoded_proof_blob)
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[3] = '0101'
+        assert_failed_call(modified_decoded_proof_blob)
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[3] = '000100'
+        assert_failed_call(modified_decoded_proof_blob)
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[4] = '0001ff'
+        assert_failed_call(modified_decoded_proof_blob)
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[5][0][0] = 'da42945ae3c75118e89abff39ad566fd0a30b574e5df8ae70ce59d4cc5f19cb2'
+        assert_failed_call(modified_decoded_proof_blob)
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[5][1][1] = 'e61bb422a77353192ae2b4b29c3773b018da71d1425b2a48cca04d7da9917fac'
+        assert_failed_call(modified_decoded_proof_blob)
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[5][2][0] = '21'
+        assert_failed_call(modified_decoded_proof_blob)
+
+        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
+        modified_decoded_proof_blob[5][2][1] = modified_decoded_proof_blob[5][2][1].replace(
+            'e733ca974e69646100000000000000000000000000000000000000000000000000000000',
+            'f733ca974e69646100000000000000000000000000000000000000000000000000000000')
+        assert_failed_call(modified_decoded_proof_blob)
 
 
     def test_manual2(self):
@@ -145,6 +223,7 @@ class TestVerifier(unittest.TestCase):
             startgas=10**6)
         self.assertEqual(result, self.verifier_contract.TX_PROOF_RESULT_PRESENT())
         self.assertEqual(index, 130)
+
 
     def help_test_entire_block(self, path_to_jsonrpc_response):
         PRESENT = self.verifier_contract.TX_PROOF_RESULT_PRESENT()
