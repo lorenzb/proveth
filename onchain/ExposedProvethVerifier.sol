@@ -1,6 +1,6 @@
 pragma solidity ^0.4.11;
 
-import "ProvethVerifier.sol";
+import "./ProvethVerifier.sol";
 
 contract ExposedProvethVerifier is ProvethVerifier {
 
