@@ -124,6 +124,29 @@ contract ProvethVerifier {
         return i;
     }
 
+    /**
+     * @notice Naive bytesToAddress conversion function - only takes first 20 bytes of whatever's passed to it
+     * @param _address - the bytes object that needs to be converted to an address
+     * @return address - the address that was converted
+     */
+    function bytesToAddress(bytes _address) internal returns (address) {
+        require(_address.length == 0 || _address.length == 20);
+        if (_address.length == 0) {
+            return 0x0000000000000000000000000000000000000000;
+        } else {
+            uint160 workingBuffer = 0;
+            uint160 workingByte = 0;
+
+            for (uint8 i = 0; i < 20; i++) {
+              workingBuffer *= 256;
+              workingByte = uint160(_address[i]);
+              workingBuffer += (workingByte);
+            }
+
+            return address(workingBuffer);
+        }
+    }
+
     struct Proof {
         uint256 kind;
         bytes rlpBlockHeader;
@@ -161,7 +184,7 @@ contract ProvethVerifier {
         uint256 nonce,
         uint256 gasprice,
         uint256 startgas,
-        bytes to, // 20 byte address for "regular" tx,
+        address to, // 20 byte address for "regular" tx,
                   // empty for contract creation tx
         uint256 value,
         bytes data,
@@ -174,7 +197,7 @@ contract ProvethVerifier {
         nonce = t.nonce;
         gasprice = t.gasprice;
         startgas = t.startgas;
-        to = t.to;
+        to = bytesToAddress(t.to);
         value = t.value;
         data = t.data;
         v = t.v;

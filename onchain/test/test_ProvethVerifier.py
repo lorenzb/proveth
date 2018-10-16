@@ -242,10 +242,15 @@ class TestVerifier(unittest.TestCase):
             self.assertEqual(result, PRESENT if present else ABSENT)
             self.assertEqual(index, i)
             if present:
+
                 self.assertEqual(nonce, utils.parse_as_int(block_dict['transactions'][i]['nonce']))
                 self.assertEqual(gas_price, utils.parse_as_int(block_dict['transactions'][i]['gasPrice']))
                 self.assertEqual(gas, utils.parse_as_int(block_dict['transactions'][i]['gas']))
-                self.assertEqual(to, utils.normalize_address(block_dict['transactions'][i]['to'] or '', allow_blank=True))
+                # contract creation corner case
+                if utils.normalize_address(block_dict['transactions'][i]['to'] or '', allow_blank=True) == b'':
+                    self.assertEqual(utils.normalize_address(to), utils.normalize_address("0x0000000000000000000000000000000000000000"))
+                else:
+                    self.assertEqual(utils.normalize_address(to), utils.normalize_address(block_dict['transactions'][i]['to']))
                 self.assertEqual(value, utils.parse_as_int(block_dict['transactions'][i]['value']))
                 self.assertEqual(data, utils.decode_hex(block_dict['transactions'][i]['input']))
                 self.assertEqual(v, utils.parse_as_int(block_dict['transactions'][i]['v']))
