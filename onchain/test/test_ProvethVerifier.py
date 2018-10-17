@@ -155,7 +155,7 @@ class TestVerifier(unittest.TestCase):
             ],
         ]
         block_hash = utils.decode_hex('51c92d45e39db17e43f0f7333de44c592b504bb8ac24dc3c39135d46655bae4f')
-        result, index, nonce, gas_price, gas, to, value, data, v, r, s = self.verifier_contract.txProof(
+        result, index, nonce, gas_price, gas, to, value, data, v, r, s, contract_creation = self.verifier_contract.txProof(
             block_hash,
             rlp.encode(rec_bin(decoded_proof_blob)),
             startgas=10**6)
@@ -217,7 +217,7 @@ class TestVerifier(unittest.TestCase):
     def test_manual2(self):
         proof_blob = utils.decode_hex('f904c601f90203a0e7c29816452c474e261b1d02d3bab489df00069892863bc654ddd609b7f7fc4ba01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d4934794b2930b35844a230f00e51431acae96fe543a0347a00272d32e39cf493242e079965942776e1a6492e74532eb25d5ed8f56aab40331a01b0134ed566a1bf54f29bd55929b75139de4450d8bf43d33b02a1b26b4873af6a0b9b5d8d9f58ad6b835be1b1bde2461e809905257c2610329fe94de5109c2cfadb9010003424803034030147969000005008084532a1c8a0020000400000424302c0578310012204d0883204010ca0000401800020448800000909104008110e02b006000060142000000994112c20924a0200002820020002402000801001020004412203000281600200000c1802940080a1c0010a029080410408a0020150400681c32020104600800004400100900032840000285000800209440420209010500800606200010420003050010100064884080000c23a02080c130028054a401080040086402088c0252005c00000000e82000406005824800412011200c2020a0010810000901120010020c08c4a000828440040008a004608950810200c208008887090e046147907c834c4d6b837a11d38379ca58845a709667827331a0915aa3cd5dea74d24e39ffd6acc5da3b2b692d4b3fcc6cc26222b9205fd64b46880eb2c4f807cb142481828408010802850801010201f902aff90131a08e61195faa58f0c8467b7f62a15ec6122d7f9484021eaf7b9fe372fffde310b8a05b9674e1d977f6a30fc12a9ac35aeecbbe0d49dcc0d8952e5d833539504ca649a05262513c779d4d62f559300126b4a34435923dceadd291ec3e1d4da6d284b8fca0672d7beb02403cbf570f2aa2956d3d6a8be5b928a425ee263e744db509958d06a0cb1005949f6f4f14beeaf39c9ee07fc2cf68fcb804aaecc4168828bb265f3f1ca0d89a971d2813936524ef4e38ee2dd300cf02764bec57845b8c0064118246ab97a014d80d349c773c690ef2711a7c4c916cec6a333594d378d2b6cebf2bff1c9ce2a0a932d14ab39608d22c0ba8a0e2fafa8a9359968f29b34827cff06e3cc5d0fdeea059d69a507142ffd21a40f829f094f283758e8a32b077c8373a6215cc0e0d61328080808080808080f851a0af2178a9930004f22ee1e2eb87f1035e559971de937dc9ae6f6ba7b6640df2a7a0d92a714520fe45d10652c6b429ca037104644bae3fe13edb8e52b2efb645e16a808080808080808080808080808080e218a01bf683031aaa6ef9c75509021a8ba5f4c9eb6f134413d57b2d3ae92699f58d95f891a06b621312dca8604610878ecf0384c9855dd6e388a0d587441be1dedfe2c73804a0530e3712b1763a989ef0b80b5a90619e7b0452069f1cf4ba3be0a7459a8654cca05f174cd7f8bd7be186b9f8127e181be52bb94cc662f36a8ec1fa3c6083db0ec7a0d94d6ab7f87669a948645e2191b193672be0720018f15115e71720140a027f3e80808080808080808080808080f87020b86df86b821935843b9aca00825208944ce3adf23418a3c3f4a61cde1c7057677befd9bf86719a2d5d6e008025a0121772bdbd0945dcfea42152186b9f7ae6d0271fdd6d1777fcadf5383a88336ca021196e93025480173f429c9e9a27c1921dd6c10b3705c30125424285250bd5a5')
         block_hash = utils.decode_hex('23d2df699671ac564b382f5b046e0cf533ebc44ab8e36426cef9d60486c3a220')
-        result, index, nonce, gas_price, gas, to, value, data, v, r, s = self.verifier_contract.txProof(
+        result, index, nonce, gas_price, gas, to, value, data, v, r, s, contract_creation = self.verifier_contract.txProof(
             block_hash,
             proof_blob,
             startgas=10**6)
@@ -233,7 +233,7 @@ class TestVerifier(unittest.TestCase):
         block_dict = jsonrpc['result']
         for i in range(len(block_dict['transactions']) + 20):
             proof_blob = proveth.generate_proof_blob_from_jsonrpc_response(jsonrpc, i)
-            result, index, nonce, gas_price, gas, to, value, data, v, r, s = self.verifier_contract.txProof(
+            result, index, nonce, gas_price, gas, to, value, data, v, r, s, contract_creation = self.verifier_contract.txProof(
                 utils.decode_hex(block_dict['hash']),
                 proof_blob,
                 startgas=10**7)
@@ -249,8 +249,10 @@ class TestVerifier(unittest.TestCase):
                 # contract creation corner case
                 if utils.normalize_address(block_dict['transactions'][i]['to'] or '', allow_blank=True) == b'':
                     self.assertEqual(utils.normalize_address(to), utils.normalize_address("0x0000000000000000000000000000000000000000"))
+                    self.assertEqual(utils.parse_as_int(contract_creation), 1)
                 else:
                     self.assertEqual(utils.normalize_address(to), utils.normalize_address(block_dict['transactions'][i]['to']))
+                    self.assertEqual(utils.parse_as_int(contract_creation), 0)
                 self.assertEqual(value, utils.parse_as_int(block_dict['transactions'][i]['value']))
                 self.assertEqual(data, utils.decode_hex(block_dict['transactions'][i]['input']))
                 self.assertEqual(v, utils.parse_as_int(block_dict['transactions'][i]['v']))
@@ -335,7 +337,7 @@ class TestVerifier(unittest.TestCase):
             stack,
         ]))
 
-        (result, index, nonce, gasprice, startgas, to, value, data, v, r, s) = \
+        (result, index, nonce, gasprice, startgas, to, value, data, v, r, s, contract_creation) = \
             self.verifier_contract.txProof(
                 rec_bin(block_hash),
                 proof_blob,
@@ -352,6 +354,8 @@ class TestVerifier(unittest.TestCase):
         self.assertEqual(v, tx['v'])
         self.assertEqual(r, tx['r'])
         self.assertEqual(s, tx['s'])
+        self.assertEqual(contract_creation, False)
+
 
 if __name__ == '__main__':
     unittest.main()
