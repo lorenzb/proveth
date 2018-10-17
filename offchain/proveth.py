@@ -5,12 +5,15 @@ from typing import List, Tuple
 
 from ethereum import (
     block,
+    bloom,
+    messages,
     transactions,
-    utils,
+    utils
 )
 import pprint
 import requests
 import rlp
+from rlp import sedes
 from trie import HexaryTrie
 from trie.constants import (
     BLANK_NODE,
@@ -58,24 +61,42 @@ def normalize_bytes(hash):
     else:
         return bytes(hash)
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 def get_args():
     parser = argparse.ArgumentParser(
         description="Patricia Merkle Trie Proof Generating Tool",
         formatter_class=argparse.RawTextHelpFormatter)
-    # TODO add stuff around adding a block header and then generating proofs of inclusion / exclusion etc etc etc
+    # TODO add stuff around adding a block header and then generating proofs of
+    # inclusion / exclusion etc etc etc
     blockInfoGroup = parser.add_mutually_exclusive_group(required=True)
     blockInfoGroup.add_argument('-n', '--block-number',
-                        default="", help="Block number that transaction exists in")
+                        default="",
+                        help="Block number that transaction exists in")
     blockInfoGroup.add_argument('-b', '--block-hash',
-                        default="", help="Block hash that transaction exists in")
-    parser.add_argument('-i', '--transaction-index', required=True, type=int,
-                        default="", help="Zero-based index of the transaction in the block "
-                                         "(e.g. the third transaction in the block is at index 2)")
+                        default="",
+                        help="Block hash that transaction exists in")
+    parser.add_argument('-tr', '--transaction_receipt_mode', required=False,
+                        type=str2bool, default="False",
+                        help="If the proof should be for a transaction receipt")
+    parser.add_argument('-i', '--transaction_index', required=True, type=int,
+                        default="",
+                        help="Zero-based index of the transaction in the "
+                        "block (e.g. the third transaction in the block is at "
+                        "index 2)")
     parser.add_argument('-r', '--rpc', required=True,
-                        default="", help="URL of web3 rpc node. (e.g. http://localhost:8545)")
-    parser.add_argument('-v', '--verbose', required=False, action='store_true', help="Print verbose output")
+                        default="",
+                        help="URL of web3 rpc node. (e.g. "
+                        "http://localhost:8545)")
+    parser.add_argument('-v', '--verbose', required=False, action='store_true',
+                        help="Print verbose output")
     return parser.parse_args()
-
 
 def block_header(block_dict: dict):
     b = block.BlockHeader(
@@ -96,7 +117,8 @@ def block_header(block_dict: dict):
         normalize_bytes(block_dict["nonce"]),
     )
     if normalize_bytes(block_dict["hash"]) != b.hash:
-        raise ValueError("Blockhash does not match. Received invalid block header?")
+        raise ValueError("Blockhash does not match. Received invalid block "
+                         "header?")
     return b
 
 def rlp_transaction(tx_dict: dict):
@@ -151,7 +173,8 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
             if MODULE_DEBUG:
                 print("Hit an extension/branch node")
             key = extract_key(node)
-            prefix, key_remainder, mpt_key_nibbles_remainder = consume_common_prefix(key, mpt_key_nibbles)
+            prefix, key_remainder, mpt_key_nibbles_remainder = \
+                    consume_common_prefix(key, mpt_key_nibbles)
             if not key_remainder:
                 if MODULE_DEBUG:
                     print("Non-divergent leaf/extension")
@@ -167,7 +190,8 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
                 stack.append(node)
                 mpt_path += prefix
         else:
-            raise ValueError("Unknown node type: {}".format(get_node_type(node)))
+            raise ValueError("Unknown node type: {}".format(
+                get_node_type(node)))
 
 
     root_node = mpt.get_node(mpt.root_hash)
@@ -209,6 +233,74 @@ def generate_proof_blob(block_dict, tx_index):
     ])
     return proof_blob
 
+def decode_int_from_hex(x):
+    return utils.decode_int(utils.decode_hex(x).lstrip(b"\x00"))
+
+def get_receipt_from_jsonrpc(response, previousGasUsed):
+    if MODULE_DEBUG:
+        print(response)
+    assert response['jsonrpc'] == '2.0'
+    assert 'id' in response
+    assert 'result' in response
+    receipt = response['result']
+    logs = []
+    for log in receipt['logs']:
+        topics = [decode_int_from_hex(x) for x in log['topics']]
+        logs.append(messages.Log(
+            address = utils.normalize_address(log['address']),
+            topics = topics,
+            data = utils.decode_hex(log['data'])))
+    # pre Byzantium returns a root
+    if 'root' in receipt:
+        return messages.Receipt(
+            state_root = normalize_bytes(receipt['root']),
+            gas_used = utils.parse_as_int(receipt['gasUsed']),
+            bloom = utils.parse_as_int(receipt['logsBloom']),
+            logs = logs)
+    receipt = messages.Receipt(
+        state_root = (b'\x01' if receipt['status'] else b''),
+        gas_used = utils.parse_as_int(receipt['cumulativeGasUsed']),
+        bloom = utils.parse_as_int(receipt['logsBloom']),
+        logs = logs)
+    if MODULE_DEBUG:
+        print("Rlp encoded receipt:")
+        print(rec_hex(rlp.encode(receipt)))
+    return receipt
+
+
+def get_receipt(url, transaction_hash, previousGasUsed):
+    request = {
+        "jsonrpc":"2.0",
+        "method":"eth_getTransactionReceipt",
+        "params":[transaction_hash],
+        "id":1,
+    }
+    if MODULE_DEBUG:
+        print(request)
+    r = requests.post(url, json=request)
+    r.raise_for_status()
+    return get_receipt_from_jsonrpc(r.json(), previousGasUsed)
+
+def generate_proof_blob_receipt(block_dict, tx_index, url):
+    header = block_header(block_dict)
+
+    mpt = HexaryTrie(db={})
+    gas_used = 0
+    for tx_dict in block_dict["transactions"]:
+        key = rlp.encode(utils.parse_as_int(tx_dict['transactionIndex']))
+        receipt = get_receipt(url, tx_dict['hash'], gas_used)
+        gas_used = receipt.as_dict()['gas_used']
+        mpt.set(key, rlp.encode(receipt))
+
+    if mpt.root_hash != normalize_bytes(block_dict['receiptsRoot']):
+        if MODULE_DEBUG:
+            print("mpt.root_hash " + str(utils.encode_hex(mpt.root_hash)))
+            print("receiptRoot " +
+                  str(normalize_bytes(utils.encode_hex(block_dict['receiptsRoot']))))
+        raise ValueError("Block receiptRoot hash does not match.")
+
+    return ""
+
 def generate_proof_blob_from_jsonrpc_response(response, tx_index):
     if MODULE_DEBUG:
         print(response)
@@ -216,6 +308,14 @@ def generate_proof_blob_from_jsonrpc_response(response, tx_index):
     assert 'id' in response
     assert 'result' in response
     return generate_proof_blob(response['result'], tx_index)
+
+def generate_proof_blob_receipt_from_jsonrpc_response(response, tx_index, url):
+    if MODULE_DEBUG:
+        print(response)
+    assert response['jsonrpc'] == '2.0'
+    assert 'id' in response
+    assert 'result' in response
+    return generate_proof_blob_receipt(response['result'], tx_index, url)
 
 
 def generate_proof_blob_from_jsonrpc_using_hash(url, block_hash, tx_index):
@@ -244,25 +344,43 @@ def generate_proof_blob_from_jsonrpc_using_number(url, block_number, tx_index):
     r.raise_for_status()
     return generate_proof_blob_from_jsonrpc_response(r.json(), tx_index)
 
+def generate_proof_blob_receipt_from_jsonrpc_using_hash(url,
+                                                        block_hash,
+                                                        tx_index):
+    request = {
+        "jsonrpc":"2.0",
+        "method":"eth_getBlockByHash",
+        "params":['0x' + utils.encode_hex(block_hash), True],
+        "id":1,
+    }
+    if MODULE_DEBUG:
+        print(request)
+    r = requests.post(url, json=request)
+    r.raise_for_status()
+    return generate_proof_blob_receipt_from_jsonrpc_response(
+        r.json(), tx_index, url)
 
 def main():
     args = get_args()
     if args.verbose:
         global MODULE_DEBUG
         MODULE_DEBUG = True
-
-    if args.block_hash:
-        proof_blob = generate_proof_blob_from_jsonrpc_using_hash(args.rpc, utils.decode_hex(args.block_hash), args.transaction_index)
+    if args.transaction_receipt_mode:
+        proof_blob = generate_proof_blob_receipt_from_jsonrpc_using_hash(
+            args.rpc, utils.decode_hex(args.block_hash), args.transaction_index)
+    elif args.block_hash:
+        proof_blob = generate_proof_blob_from_jsonrpc_using_hash(
+            args.rpc, utils.decode_hex(args.block_hash), args.transaction_index)
     elif args.block_number:
-        proof_blob = generate_proof_blob_from_jsonrpc_using_number(args.rpc, int(args.block_number), args.transaction_index)
+        proof_blob = generate_proof_blob_from_jsonrpc_using_number(
+            args.rpc, int(args.block_number), args.transaction_index)
     else:
         print("Either --block-hash or --block-number are required")
         exit(1)
 
     print("Final Output: ")
-    print(rec_hex(proof_blob))
+    #print(rec_hex(proof_blob))
     exit(0)
 
 if __name__ == "__main__":
     main()
-
