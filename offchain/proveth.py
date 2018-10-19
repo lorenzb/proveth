@@ -96,7 +96,9 @@ def block_header(block_dict: dict):
         normalize_bytes(block_dict["nonce"]),
     )
     if normalize_bytes(block_dict["hash"]) != b.hash:
-        raise ValueError("Blockhash does not match. Received invalid block header?")
+        raise ValueError("Blockhash does not match. Received invalid block header? {} vs {}".format(
+            str(normalize_bytes(block_dict["hash"])),
+            str(b.hash)))
     return b
 
 def rlp_transaction(tx_dict: dict):
@@ -112,7 +114,29 @@ def rlp_transaction(tx_dict: dict):
         utils.bytes_to_int(normalize_bytes(tx_dict['s'])),
     )
     if normalize_bytes(tx_dict['hash']) != t.hash:
-        raise ValueError("Tx hash does not match. Received invalid transaction?")
+        raise ValueError("""Tx hash does not match. Received invalid transaction?
+        hashes:         {} {}
+        nonce:          {}
+        gasPrice:       {}
+        gas:            {}
+        to:             {}
+        value:          {}
+        input:          {}
+        v:              {}
+        r:              {}
+        s:              {}
+        """.format(
+            tx_dict['hash'], t.hash,
+            utils.parse_as_int(tx_dict['nonce']),
+            utils.parse_as_int(tx_dict['gasPrice']),
+            utils.parse_as_int(tx_dict['gas']),
+            normalize_bytes(tx_dict['to'] or ''),
+            utils.parse_as_int(tx_dict['value']),
+            utils.decode_hex(tx_dict['input']),
+            utils.parse_as_int(tx_dict['v']),
+            utils.bytes_to_int(normalize_bytes(tx_dict['r'])),
+            utils.bytes_to_int(normalize_bytes(tx_dict['s'])),
+        ))
     return rlp.encode(t)
 
 
