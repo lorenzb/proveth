@@ -43,6 +43,58 @@ class TestVerifier(unittest.TestCase):
 
         self.rpc_cache = {}
 
+    def test_decodeUnsignedTx(self):
+        tx = collections.OrderedDict([
+            ('nonce', 3),
+            ('gasprice', 0x06fc23ac00),
+            ('startgas', 0x0494e5),
+            ('to', rec_bin('0xb13f6f423781bd1934fc8599782f5e161ce7c816')),
+            ('value', 0x2386f26fc10000),
+            ('data', rec_bin('0xf435f5a7000000000000000000000000c198eccab3fe1f35e9160b48eb18af7934a13262')),
+        ])
+        rlp_tx = rlp.encode(list(tx.values()))
+        print(rec_hex(utils.sha3(rlp_tx)))
+        (nonce, gasprice, startgas, to, value, data, is_contract_creation) = \
+            self.verifier_contract.exposedDecodeUnsignedTx(
+                rlp_tx
+            )
+        self.assertEqual(nonce, tx['nonce'])
+        self.assertEqual(gasprice, tx['gasprice'])
+        self.assertEqual(startgas, tx['startgas'])
+        self.assertEqualAddr(to, tx['to'])
+        self.assertEqual(value, tx['value'])
+        self.assertEqual(data, tx['data'])
+        self.assertFalse(is_contract_creation)
+
+    def test_decodeSignedTx(self):
+        tx = collections.OrderedDict([
+            ('nonce', 3),
+            ('gasprice', 0x06fc23ac00),
+            ('startgas', 0x0494e5),
+            ('to', rec_bin('0xb13f6f423781bd1934fc8599782f5e161ce7c816')),
+            ('value', 0x2386f26fc10000),
+            ('data', rec_bin('0xf435f5a7000000000000000000000000c198eccab3fe1f35e9160b48eb18af7934a13262')),
+            ('v', 28),
+            ('r', 115792089237316195423570985008687907852837564279074904382605163141518161494337 - 1),
+            ('s', 17),
+        ])
+        rlp_tx = rlp.encode(list(tx.values()))
+        print(rec_hex(utils.sha3(rlp_tx)))
+        (nonce, gasprice, startgas, to, value, data, v, r, s, is_contract_creation) = \
+            self.verifier_contract.exposedDecodeSignedTx(
+                rlp_tx
+            )
+        self.assertEqual(nonce, tx['nonce'])
+        self.assertEqual(gasprice, tx['gasprice'])
+        self.assertEqual(startgas, tx['startgas'])
+        self.assertEqualAddr(to, tx['to'])
+        self.assertEqual(value, tx['value'])
+        self.assertEqual(data, tx['data'])
+        self.assertEqual(v, tx['v'])
+        self.assertEqual(r, tx['r'])
+        self.assertEqual(s, tx['s'])
+        self.assertFalse(is_contract_creation)
+
     def test_sharedPrefixLength(self):
         self.assertEqual(
             self.verifier_contract.exposedSharedPrefixLength(0, b'', b'a'),
@@ -76,33 +128,6 @@ class TestVerifier(unittest.TestCase):
             self.verifier_contract.exposedIsPrefix(b'a', b''))
         self.assertTrue(
             self.verifier_contract.exposedIsPrefix(b'abc', b'abcdef'))
-
-
-    def test_decodeAndHashUnsignedTx(self):
-        tx = collections.OrderedDict([
-            ('nonce', 3),
-            ('gasprice', 0x06fc23ac00),
-            ('startgas', 0x0494e5),
-            ('to', rec_bin('0xb13f6f423781bd1934fc8599782f5e161ce7c816')),
-            ('value', 0x2386f26fc10000),
-            ('data', rec_bin('0xf435f5a7000000000000000000000000c198eccab3fe1f35e9160b48eb18af7934a13262')),
-        ])
-
-        rlp_tx = rlp.encode(list(tx.values()))
-        print(rec_hex(utils.sha3(rlp_tx)))
-
-        (valid, sigHash, nonce, gasprice, startgas, to, value, data) = \
-            self.verifier_contract.decodeAndHashUnsignedTx(
-                rlp_tx
-            )
-        self.assertTrue(valid)
-        self.assertEqual(sigHash, utils.sha3(rlp_tx))
-        self.assertEqual(nonce, tx['nonce'])
-        self.assertEqual(gasprice, tx['gasprice'])
-        self.assertEqual(startgas, tx['startgas'])
-        self.assertEqualAddr(to, tx['to'])
-        self.assertEqual(value, tx['value'])
-        self.assertEqual(data, tx['data'])
 
     def test_merklePatriciaCompactDecode(self):
         self.assertEqual(

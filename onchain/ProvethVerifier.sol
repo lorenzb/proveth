@@ -9,7 +9,17 @@ contract ProvethVerifier {
 
     uint256 constant TX_ROOT_HASH_INDEX = 4;
 
-    struct Transaction {
+    struct UnsignedTransaction {
+        uint256 nonce;
+        uint256 gasprice;
+        uint256 startgas;
+        address to;
+        uint256 value;
+        bytes data;
+        bool isContractCreation;
+    }
+
+    struct SignedTransaction {
         uint256 nonce;
         uint256 gasprice;
         uint256 startgas;
@@ -22,32 +32,9 @@ contract ProvethVerifier {
         bool isContractCreation;
     }
 
-    function decodeAndHashUnsignedTx(bytes rlpUnsignedTx) public view returns (
-        bool valid,
-        bytes32 sigHash,
-        uint256 nonce,
-        uint256 gasprice,
-        uint256 startgas,
-        bytes to,
-        uint256 value,
-        bytes data
-    ) {
-        sigHash = keccak256(rlpUnsignedTx);
-        valid = true;
+    function decodeUnsignedTx(bytes rlpUnsignedTx) internal view returns (UnsignedTransaction memory t) {
         RLP.RLPItem[] memory fields = rlpUnsignedTx.toRLPItem().toList();
         require(fields.length == 6);
-        nonce = fields[0].toUint();
-        gasprice = fields[1].toUint();
-        startgas = fields[2].toUint();
-        to = fields[3].toData();
-        value = fields[4].toUint();
-        data = fields[5].toData();
-    }
-
-    // TODO(lorenzb): This should actually be pure, not view. Probably because
-    // wrong declarations in RLP.sol.
-    function decodeTx(bytes rlptx) internal view returns (Transaction memory t) {
-        RLP.RLPItem[] memory fields = rlptx.toRLPItem().toList();
         address potentialAddress;
         bool isContractCreation;
         if(fields[3].isEmpty()) {
@@ -57,7 +44,31 @@ contract ProvethVerifier {
             potentialAddress = fields[3].toAddress();
             isContractCreation = false;
         }
-        t = Transaction(
+        t = UnsignedTransaction(
+            fields[0].toUint(), // nonce
+            fields[1].toUint(), // gasprice
+            fields[2].toUint(), // startgas
+            potentialAddress,   // to
+            fields[4].toUint(), // value
+            fields[5].toData(), // data
+            isContractCreation
+        );
+    }
+
+    // TODO(lorenzb): This should actually be pure, not view. Probably because
+    // wrong declarations in RLP.sol.
+    function decodeSignedTx(bytes rlpSignedTx) internal view returns (SignedTransaction memory t) {
+        RLP.RLPItem[] memory fields = rlpSignedTx.toRLPItem().toList();
+        address potentialAddress;
+        bool isContractCreation;
+        if(fields[3].isEmpty()) {
+            potentialAddress = 0x0000000000000000000000000000000000000000;
+            isContractCreation = true;
+        } else {
+            potentialAddress = fields[3].toAddress();
+            isContractCreation = false;
+        }
+        t = SignedTransaction(
             fields[0].toUint(),
             fields[1].toUint(),
             fields[2].toUint(),
@@ -181,7 +192,7 @@ contract ProvethVerifier {
         uint256 s,
         bool isContractCreation
     ) {
-        Transaction memory t;
+        SignedTransaction memory t;
         (result, index, t) = validateTxProof(blockHash, proofBlob);
         nonce = t.nonce;
         gasprice = t.gasprice;
@@ -198,7 +209,7 @@ contract ProvethVerifier {
     function validateTxProof(
         bytes32 blockHash,
         bytes proofBlob
-    ) internal returns (uint8 result, uint256 index, Transaction memory t) {
+    ) internal returns (uint8 result, uint256 index, SignedTransaction memory t) {
         result = 0;
         index = 0;
         Proof memory proof = decodeProofBlob(proofBlob);
@@ -228,7 +239,7 @@ contract ProvethVerifier {
             if (isPrefix(proof.mptPath, mptKeyNibbles) && proof.mptPath.length == mptKeyNibbles.length) {
                 result = TX_PROOF_RESULT_PRESENT;
                 index = proof.txIndex;
-                t  = decodeTx(rlpTx);
+                t  = decodeSignedTx(rlpTx);
                 return;
             } else {
                 revert();
