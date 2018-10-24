@@ -2,6 +2,12 @@ pragma solidity ^0.4.11;
 
 import "./ProvethVerifier.sol";
 
+// This contract is for testing. It exposes internal methods of
+// ProvethVerifier so that we can test them.
+//
+// *************************************************************
+// *** Never deploy this contract!                           ***
+// *************************************************************
 contract ExposedProvethVerifier is ProvethVerifier {
 
     function exposedDecodeUnsignedTx(bytes rlpUnsignedTx) returns (
