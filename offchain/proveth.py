@@ -23,6 +23,7 @@ from trie.constants import (
 )
 from trie.utils.nodes import *
 from trie.utils.nibbles import encode_nibbles, decode_nibbles, bytes_to_nibbles
+import math
 
 MODULE_DEBUG = False
 
@@ -55,6 +56,8 @@ def normalize_bytes(hash):
         if len(hash) % 2 != 0:
             hash = '0' + hash
         return utils.decode_hex(hash)
+    elif isinstance(hash, int):
+        return hash.to_bytes(length=(math.ceil(hash.bit_length() / 8)), byteorder="big", signed=False)
     else:
         return bytes(hash)
 
@@ -142,7 +145,7 @@ def rlp_transaction(tx_dict: dict):
 
 def generate_proof(mpt, mpt_key_nibbles: bytes):
     if not all(nibble < 16 for nibble in mpt_key_nibbles):
-        raise ValueError("mpt_key_nibbles has non-nibble elements")
+        raise ValueError("mpt_key_nibbles has non-nibble elements {}".format(str(mpt_key_nibbles)))
     EMPTY = 128
     stack_indexes = []
     mpt_path = []
@@ -218,7 +221,7 @@ def generate_proof_blob(block_dict, tx_index):
         mpt.set(key, rlp_transaction(tx_dict))
 
     if mpt.root_hash != normalize_bytes(block_dict['transactionsRoot']):
-        raise ValueError("Tx trie root hash does not match.")
+        raise ValueError("Tx trie root hash does not match. Calculated: {} Sent: {}".format(mpt.root_hash.hex(), normalize_bytes(block_dict['transactionsRoot']).hex()))
 
     mpt_key_nibbles = bytes_to_nibbles(rlp.encode(tx_index))
     mpt_path, stack_indexes, stack = generate_proof(mpt, mpt_key_nibbles)
