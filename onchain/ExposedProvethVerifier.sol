@@ -1,8 +1,61 @@
 pragma solidity ^0.4.11;
 
-import "ProvethVerifier.sol";
+import "./ProvethVerifier.sol";
 
+// This contract is for testing. It exposes internal methods of
+// ProvethVerifier so that we can test them.
+//
+// *************************************************************
+// *** Never deploy this contract!                           ***
+// *************************************************************
 contract ExposedProvethVerifier is ProvethVerifier {
+
+    function exposedDecodeUnsignedTx(bytes rlpUnsignedTx) returns (
+        uint256 nonce,
+        uint256 gasprice,
+        uint256 startgas,
+        address to,
+        uint256 value,
+        bytes data,
+        bool isContractCreation
+    ) {
+        UnsignedTransaction memory tx = decodeUnsignedTx(rlpUnsignedTx);
+        nonce = tx.nonce;
+        gasprice = tx.gasprice;
+        startgas = tx.startgas;
+        to = tx.to;
+        value = tx.value;
+        data = tx.data;
+        isContractCreation = tx.isContractCreation;
+        return;
+    }
+
+    function exposedDecodeSignedTx(bytes rlpSignedTx) returns (
+        uint256 nonce,
+        uint256 gasprice,
+        uint256 startgas,
+        address to,
+        uint256 value,
+        bytes data,
+        uint256 v,
+        uint256 r,
+        uint256 s,
+        bool isContractCreation
+    ) {
+        SignedTransaction memory tx = decodeSignedTx(rlpSignedTx);
+        nonce = tx.nonce;
+        gasprice = tx.gasprice;
+        startgas = tx.startgas;
+        to = tx.to;
+        value = tx.value;
+        data = tx.data;
+        v = tx.v;
+        r = tx.r;
+        s = tx.s;
+        isContractCreation = tx.isContractCreation;
+        return;
+    }
+
 
     function exposedMerklePatriciaCompactDecode(bytes compact) returns (bytes nibbles) {
         return merklePatriciaCompactDecode(compact);

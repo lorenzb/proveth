@@ -9,58 +9,80 @@ contract ProvethVerifier {
 
     uint256 constant TX_ROOT_HASH_INDEX = 4;
 
-    struct Transaction {
+    struct UnsignedTransaction {
         uint256 nonce;
         uint256 gasprice;
         uint256 startgas;
-        bytes to;
+        address to;
+        uint256 value;
+        bytes data;
+        bool isContractCreation;
+    }
+
+    struct SignedTransaction {
+        uint256 nonce;
+        uint256 gasprice;
+        uint256 startgas;
+        address to;
         uint256 value;
         bytes data;
         uint256 v;
         uint256 r;
         uint256 s;
+        bool isContractCreation;
     }
 
-    function decodeAndHashUnsignedTx(bytes rlpUnsignedTx) public view returns (
-        bool valid,
-        bytes32 sigHash,
-        uint256 nonce,
-        uint256 gasprice,
-        uint256 startgas,
-        bytes to,
-        uint256 value,
-        bytes data
-    ) {
-        sigHash = keccak256(rlpUnsignedTx);
-        valid = true;
+    function decodeUnsignedTx(bytes rlpUnsignedTx) internal view returns (UnsignedTransaction memory t) {
         RLP.RLPItem[] memory fields = rlpUnsignedTx.toRLPItem().toList();
         require(fields.length == 6);
-        nonce = fields[0].toUint();
-        gasprice = fields[1].toUint();
-        startgas = fields[2].toUint();
-        to = fields[3].toData();
-        value = fields[4].toUint();
-        data = fields[5].toData();
+        address potentialAddress;
+        bool isContractCreation;
+        if(fields[3].isEmpty()) {
+            potentialAddress = 0x0000000000000000000000000000000000000000;
+            isContractCreation = true;
+        } else {
+            potentialAddress = fields[3].toAddress();
+            isContractCreation = false;
+        }
+        t = UnsignedTransaction(
+            fields[0].toUint(), // nonce
+            fields[1].toUint(), // gasprice
+            fields[2].toUint(), // startgas
+            potentialAddress,   // to
+            fields[4].toUint(), // value
+            fields[5].toData(), // data
+            isContractCreation
+        );
     }
 
     // TODO(lorenzb): This should actually be pure, not view. Probably because
     // wrong declarations in RLP.sol.
-    function decodeTx(bytes rlptx) internal view returns (Transaction memory t) {
-        RLP.RLPItem[] memory fields = rlptx.toRLPItem().toList();
-        t = Transaction(
+    function decodeSignedTx(bytes rlpSignedTx) internal view returns (SignedTransaction memory t) {
+        RLP.RLPItem[] memory fields = rlpSignedTx.toRLPItem().toList();
+        address potentialAddress;
+        bool isContractCreation;
+        if(fields[3].isEmpty()) {
+            potentialAddress = 0x0000000000000000000000000000000000000000;
+            isContractCreation = true;
+        } else {
+            potentialAddress = fields[3].toAddress();
+            isContractCreation = false;
+        }
+        t = SignedTransaction(
             fields[0].toUint(),
             fields[1].toUint(),
             fields[2].toUint(),
-            fields[3].toData(),
+            potentialAddress,
             fields[4].toUint(),
             fields[5].toData(),
             fields[6].toUint(),
             fields[7].toUint(),
-            fields[8].toUint()
+            fields[8].toUint(),
+            isContractCreation
         );
     }
 
-    function decodeNibbles(bytes compact, uint skipNibbles) internal returns (bytes memory nibbles) {
+    function decodeNibbles(bytes compact, uint skipNibbles) internal pure returns (bytes memory nibbles) {
         require(compact.length > 0);
 
         uint length = compact.length * 2;
@@ -82,7 +104,7 @@ contract ProvethVerifier {
         assert(nibblesLength == nibbles.length);
     }
 
-    function merklePatriciaCompactDecode(bytes compact) internal returns (bytes memory nibbles) {
+    function merklePatriciaCompactDecode(bytes compact) internal pure returns (bytes memory nibbles) {
         require(compact.length > 0);
         uint first_nibble = uint8(compact[0]) >> 4 & 0xF;
         uint skipNibbles;
@@ -101,7 +123,7 @@ contract ProvethVerifier {
         return decodeNibbles(compact, skipNibbles);
     }
 
-    function isPrefix(bytes prefix, bytes full) internal returns (bool) {
+    function isPrefix(bytes prefix, bytes full) internal pure returns (bool) {
         if (prefix.length > full.length) {
             return false;
         }
@@ -115,7 +137,7 @@ contract ProvethVerifier {
         return true;
     }
 
-    function sharedPrefixLength(uint xsOffset, bytes xs, bytes ys) internal returns (uint) {
+    function sharedPrefixLength(uint xsOffset, bytes xs, bytes ys) internal pure returns (uint) {
         for (uint i = 0; i + xsOffset < xs.length && i < ys.length; i++) {
             if (xs[i + xsOffset] != ys[i]) {
                 return i;
@@ -135,7 +157,7 @@ contract ProvethVerifier {
         RLP.RLPItem[] stack;
     }
 
-    function decodeProofBlob(bytes proofBlob) internal returns (Proof memory proof) {
+    function decodeProofBlob(bytes proofBlob) internal view returns (Proof memory proof) {
         RLP.RLPItem[] memory proofFields = proofBlob.toRLPItem().toList();
         proof = Proof(
             proofFields[0].toUint(),
@@ -155,21 +177,22 @@ contract ProvethVerifier {
     function txProof(
         bytes32 blockHash,
         bytes proofBlob
-    ) returns (
+    ) public returns (
         uint8 result, // see TX_PROOF_RESULT_*
         uint256 index,
         uint256 nonce,
         uint256 gasprice,
         uint256 startgas,
-        bytes to, // 20 byte address for "regular" tx,
+        address to, // 20 byte address for "regular" tx,
                   // empty for contract creation tx
         uint256 value,
         bytes data,
         uint256 v,
         uint256 r,
-        uint256 s
+        uint256 s,
+        bool isContractCreation
     ) {
-        Transaction memory t;
+        SignedTransaction memory t;
         (result, index, t) = validateTxProof(blockHash, proofBlob);
         nonce = t.nonce;
         gasprice = t.gasprice;
@@ -180,12 +203,13 @@ contract ProvethVerifier {
         v = t.v;
         r = t.r;
         s = t.s;
+        isContractCreation = t.isContractCreation;
     }
 
     function validateTxProof(
         bytes32 blockHash,
         bytes proofBlob
-    ) internal returns (uint8 result, uint256 index, Transaction memory t) {
+    ) internal returns (uint8 result, uint256 index, SignedTransaction memory t) {
         result = 0;
         index = 0;
         Proof memory proof = decodeProofBlob(proofBlob);
@@ -215,7 +239,7 @@ contract ProvethVerifier {
             if (isPrefix(proof.mptPath, mptKeyNibbles) && proof.mptPath.length == mptKeyNibbles.length) {
                 result = TX_PROOF_RESULT_PRESENT;
                 index = proof.txIndex;
-                t = decodeTx(rlpTx);
+                t  = decodeSignedTx(rlpTx);
                 return;
             } else {
                 revert();
@@ -223,11 +247,11 @@ contract ProvethVerifier {
         }
     }
 
-    function mptHashHash(bytes memory input) internal returns (bytes32) {
+    function mptHashHash(bytes memory input) internal pure returns (bytes32) {
         if (input.length < 32) {
             return keccak256(input);
         } else {
-            return keccak256(keccak256(input));
+            return keccak256(abi.encodePacked(keccak256(abi.encodePacked(input))));
         }
     }
 
