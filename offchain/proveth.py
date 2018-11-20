@@ -5,7 +5,6 @@ from typing import List, Tuple
 
 from ethereum import (
     block,
-    bloom,
     messages,
     transactions,
     utils
@@ -13,7 +12,6 @@ from ethereum import (
 import pprint
 import requests
 import rlp
-from rlp import sedes
 from trie import HexaryTrie
 from trie.constants import (
     BLANK_NODE,
