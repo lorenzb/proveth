@@ -33,11 +33,11 @@ class TestVerifier(unittest.TestCase):
             self.chain,
             {'ProvethVerifier.sol': {'urls': [os.path.join(contract_dir, 'ProvethVerifier.sol')]},
              'RLP.sol': {'urls': [os.path.join(contract_dir, 'RLP.sol')]},
-             'ExposedProvethVerifier.sol': {'urls': [os.path.join(contract_dir, 'ExposedProvethVerifier.sol')]},
+             'ProvethVerifierTestHelper.sol': {'urls': [os.path.join(contract_dir, 'ProvethVerifierTestHelper.sol')]},
             },
             contract_dir,
-            'ExposedProvethVerifier.sol',
-            'ExposedProvethVerifier',
+            'ProvethVerifierTestHelper.sol',
+            'ProvethVerifierTestHelper',
             10**7,
         )
 

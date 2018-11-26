@@ -8,7 +8,7 @@ import "./ProvethVerifier.sol";
 // *************************************************************
 // *** Never deploy this contract!                           ***
 // *************************************************************
-contract ExposedProvethVerifier is ProvethVerifier {
+contract ProvethVerifierTestHelper is ProvethVerifier {
 
     function exposedDecodeUnsignedTx(bytes rlpUnsignedTx) returns (
         uint256 nonce,
