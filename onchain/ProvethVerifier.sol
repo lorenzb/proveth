@@ -44,7 +44,7 @@ contract ProvethVerifier {
         return b == 0x80 /* empty byte string */ || b == 0xc0 /* empty list */;
     }
 
-    function decodeUnsignedTx(bytes rlpUnsignedTx) internal view returns (UnsignedTransaction memory t) {
+    function decodeUnsignedTx(bytes rlpUnsignedTx) internal pure returns (UnsignedTransaction memory t) {
         RLPReader.RLPItem[] memory fields = rlpUnsignedTx.toRlpItem().toList();
         require(fields.length == 6);
         address potentialAddress;
@@ -69,7 +69,7 @@ contract ProvethVerifier {
 
     // TODO(lorenzb): This should actually be pure, not view. Probably because
     // wrong declarations in RLP.sol.
-    function decodeSignedTx(bytes rlpSignedTx) internal view returns (SignedTransaction memory t) {
+    function decodeSignedTx(bytes rlpSignedTx) internal pure returns (SignedTransaction memory t) {
         RLPReader.RLPItem[] memory fields = rlpSignedTx.toRlpItem().toList();
         address potentialAddress;
         bool isContractCreation;
@@ -169,7 +169,7 @@ contract ProvethVerifier {
         RLPReader.RLPItem[] stack;
     }
 
-    function decodeProofBlob(bytes proofBlob) internal view returns (Proof memory proof) {
+    function decodeProofBlob(bytes proofBlob) internal pure returns (Proof memory proof) {
         RLPReader.RLPItem[] memory proofFields = proofBlob.toRlpItem().toList();
         proof = Proof(
             proofFields[0].toUint(),
@@ -189,7 +189,7 @@ contract ProvethVerifier {
     function txProof(
         bytes32 blockHash,
         bytes proofBlob
-    ) public returns (
+    ) public pure returns (
         uint8 result, // see TX_PROOF_RESULT_*
         uint256 index,
         uint256 nonce,
@@ -221,7 +221,7 @@ contract ProvethVerifier {
     function validateTxProof(
         bytes32 blockHash,
         bytes proofBlob
-    ) internal returns (uint8 result, uint256 index, SignedTransaction memory t) {
+    ) internal pure returns (uint8 result, uint256 index, SignedTransaction memory t) {
         result = 0;
         index = 0;
         Proof memory proof = decodeProofBlob(proofBlob);
@@ -297,7 +297,7 @@ contract ProvethVerifier {
         bytes mptPath,
         bytes stackIndexes,
         RLPReader.RLPItem[] memory stack
-    ) internal returns (bytes memory value) {
+    ) internal pure returns (bytes memory value) {
         require(stackIndexes.length == stack.length);
 
         uint mptPathOffset = 0;
