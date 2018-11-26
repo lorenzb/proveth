@@ -4,7 +4,6 @@ import "./Solidity-RLP/contracts/RLPReader.sol";
 
 contract ProvethVerifier {
     using RLPReader for RLPReader.RLPItem;
-    // using RLP for RLP.Iterator;
     using RLPReader for bytes;
 
     uint256 constant TX_ROOT_HASH_INDEX = 4;
