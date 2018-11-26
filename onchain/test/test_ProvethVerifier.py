@@ -32,7 +32,7 @@ class TestVerifier(unittest.TestCase):
         self.verifier_contract = deploy_solidity_contract(
             self.chain,
             {'ProvethVerifier.sol': {'urls': [os.path.join(contract_dir, 'ProvethVerifier.sol')]},
-             'RLP.sol': {'urls': [os.path.join(contract_dir, 'RLP.sol')]},
+             'Solidity-RLP/contracts/RLPReader.sol': {'urls': [os.path.join(contract_dir, 'Solidity-RLP/contracts/RLPReader.sol')]},
              'ProvethVerifierTestHelper.sol': {'urls': [os.path.join(contract_dir, 'ProvethVerifierTestHelper.sol')]},
             },
             contract_dir,

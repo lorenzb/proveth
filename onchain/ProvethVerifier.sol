@@ -1,11 +1,11 @@
 pragma solidity ^0.4.11;
 
-import "./RLP.sol";
+import "./Solidity-RLP/contracts/RLPReader.sol";
 
 contract ProvethVerifier {
-    using RLP for RLP.RLPItem;
-    using RLP for RLP.Iterator;
-    using RLP for bytes;
+    using RLPReader for RLPReader.RLPItem;
+    // using RLP for RLP.Iterator;
+    using RLPReader for bytes;
 
     uint256 constant TX_ROOT_HASH_INDEX = 4;
 
@@ -32,12 +32,24 @@ contract ProvethVerifier {
         bool isContractCreation;
     }
 
+    function isEmpty(RLPReader.RLPItem memory item) internal pure returns (bool) {
+        if (item.len != 1) {
+            return false;
+        }
+        uint8 b;
+        uint memPtr = item.memPtr;
+        assembly {
+            b := byte(0, mload(memPtr))
+        }
+        return b == 0x80 /* empty byte string */ || b == 0xc0 /* empty list */;
+    }
+
     function decodeUnsignedTx(bytes rlpUnsignedTx) internal view returns (UnsignedTransaction memory t) {
-        RLP.RLPItem[] memory fields = rlpUnsignedTx.toRLPItem().toList();
+        RLPReader.RLPItem[] memory fields = rlpUnsignedTx.toRlpItem().toList();
         require(fields.length == 6);
         address potentialAddress;
         bool isContractCreation;
-        if(fields[3].isEmpty()) {
+        if(isEmpty(fields[3])) {
             potentialAddress = 0x0000000000000000000000000000000000000000;
             isContractCreation = true;
         } else {
@@ -50,7 +62,7 @@ contract ProvethVerifier {
             fields[2].toUint(), // startgas
             potentialAddress,   // to
             fields[4].toUint(), // value
-            fields[5].toData(), // data
+            fields[5].toBytes(), // data
             isContractCreation
         );
     }
@@ -58,10 +70,10 @@ contract ProvethVerifier {
     // TODO(lorenzb): This should actually be pure, not view. Probably because
     // wrong declarations in RLP.sol.
     function decodeSignedTx(bytes rlpSignedTx) internal view returns (SignedTransaction memory t) {
-        RLP.RLPItem[] memory fields = rlpSignedTx.toRLPItem().toList();
+        RLPReader.RLPItem[] memory fields = rlpSignedTx.toRlpItem().toList();
         address potentialAddress;
         bool isContractCreation;
-        if(fields[3].isEmpty()) {
+        if(isEmpty(fields[3])) {
             potentialAddress = 0x0000000000000000000000000000000000000000;
             isContractCreation = true;
         } else {
@@ -74,7 +86,7 @@ contract ProvethVerifier {
             fields[2].toUint(),
             potentialAddress,
             fields[4].toUint(),
-            fields[5].toData(),
+            fields[5].toBytes(),
             fields[6].toUint(),
             fields[7].toUint(),
             fields[8].toUint(),
@@ -154,19 +166,19 @@ contract ProvethVerifier {
         uint txIndex;
         bytes mptPath;
         bytes stackIndexes;
-        RLP.RLPItem[] stack;
+        RLPReader.RLPItem[] stack;
     }
 
     function decodeProofBlob(bytes proofBlob) internal view returns (Proof memory proof) {
-        RLP.RLPItem[] memory proofFields = proofBlob.toRLPItem().toList();
+        RLPReader.RLPItem[] memory proofFields = proofBlob.toRlpItem().toList();
         proof = Proof(
             proofFields[0].toUint(),
-            proofFields[1].toBytes(),
-            proofFields[1].toList()[TX_ROOT_HASH_INDEX].toBytes32(),
-            proofFields[2].toBytes(),
+            proofFields[1].toRlpBytes(),
+            bytes32(proofFields[1].toList()[TX_ROOT_HASH_INDEX].toUint()),
+            proofFields[2].toRlpBytes(),
             proofFields[2].toUint(),
-            proofFields[3].toData(),
-            proofFields[4].toData(),
+            proofFields[3].toBytes(),
+            proofFields[4].toBytes(),
             proofFields[5].toList()
         );
     }
@@ -284,7 +296,7 @@ contract ProvethVerifier {
         bytes32 rootHash,
         bytes mptPath,
         bytes stackIndexes,
-        RLP.RLPItem[] memory stack
+        RLPReader.RLPItem[] memory stack
     ) internal returns (bytes memory value) {
         require(stackIndexes.length == stack.length);
 
@@ -292,9 +304,9 @@ contract ProvethVerifier {
 
         bytes32 nodeHashHash;
         bytes memory rlpNode;
-        RLP.RLPItem[] memory node;
+        RLPReader.RLPItem[] memory node;
 
-        RLP.RLPItem memory rlpValue;
+        RLPReader.RLPItem memory rlpValue;
 
         if (stack.length == 0) {
             // Root hash of empty Merkle-Patricia-Trie
@@ -308,7 +320,7 @@ contract ProvethVerifier {
             // We use the fact that an rlp encoded list consists of some
             // encoding of its length plus the concatenation of its
             // *rlp-encoded* items.
-            rlpNode = stack[i].toBytes();
+            rlpNode = stack[i].toRlpBytes();
             // The root node is hashed with Keccak-256 ...
             if (i == 0 && rootHash != keccak256(rlpNode)) {
                 revert();
@@ -325,7 +337,7 @@ contract ProvethVerifier {
             if (node.length == 2) {
                 // Extension or Leaf node
 
-                bytes memory nodePath = merklePatriciaCompactDecode(node[0].toData());
+                bytes memory nodePath = merklePatriciaCompactDecode(node[0].toBytes());
 
                 uint prefixLength = sharedPrefixLength(mptPathOffset, mptPath, nodePath);
                 mptPathOffset += prefixLength;
@@ -367,14 +379,14 @@ contract ProvethVerifier {
                     if (i < stack.length - 1) {
                         // not last level, must be Extension node
 
-                        if (node[uint(stackIndexes[i])].isData()) {
+                        if (!node[uint(stackIndexes[i])].isList()) {
                             // rlp(child) was at least 32 bytes. node[1] contains
                             // Keccak256(rlp(child)).
-                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toData());
+                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toBytes());
                         } else {
                             // rlp(child) was at less than 32 bytes. node[1] contains
                             // rlp(child).
-                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toBytes());
+                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toRlpBytes());
                         }
                     } else {
                         // last level, must be Leaf node
@@ -385,7 +397,7 @@ contract ProvethVerifier {
                         }
 
                         rlpValue = node[uint(stackIndexes[i])];
-                        return rlpValue.toData();
+                        return rlpValue.toBytes();
                     }
                 } else {
                     // an extension/leaf node only has two fields.
@@ -404,15 +416,15 @@ contract ProvethVerifier {
                     if (i < stack.length - 1) {
                         // not last level
 
-                        if (node[uint(stackIndexes[i])].isData()) {
-                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toData());
-                        } else {
+                        if (!node[uint(stackIndexes[i])].isList()) {
                             nodeHashHash = keccak256(node[uint(stackIndexes[i])].toBytes());
+                        } else {
+                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toRlpBytes());
                         }
                     } else {
                         // last level
 
-                        if (node[uint(stackIndexes[i])].toData().length != 0) {
+                        if (node[uint(stackIndexes[i])].toBytes().length != 0) {
                             // hash isn't empty, but should be since this a proof
                             // of exclusion: we're at the last level of the proof
                             // and the stack index points to one of the child nodes
@@ -439,7 +451,7 @@ contract ProvethVerifier {
                     }
 
                     rlpValue = node[uint(stackIndexes[i])];
-                    return rlpValue.toData();
+                    return rlpValue.toBytes();
                 } else {
                     // index cannot be greater than 16
                     revert();

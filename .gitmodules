@@ -1,0 +1,3 @@
+[submodule "onchain/Solidity-RLP"]
+	path = onchain/Solidity-RLP
+	url = https://github.com/hamdiallam/Solidity-RLP.git
