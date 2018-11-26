@@ -247,6 +247,15 @@ contract ProvethVerifier {
         }
     }
 
+    /// @dev Computes the hash of the Merkle-Patricia-Trie hash of the input.
+    ///      Merkle-Patricia-Tries use a weird "hash function" that outputs
+    ///      *variable-length* hashes: If the input is shorter than 32 bytes,
+    ///      the MPT hash is the input. Otherwise, the MPT hash is the
+    ///      Keccak-256 hash of the input.
+    ///      The easiest way to compare variable-length byte sequences is
+    ///      to compare their Keccak-256 hashes.
+    /// @param input The byte sequence to be hashed.
+    /// @return Keccak-256(MPT-hash(input))
     function mptHashHash(bytes memory input) internal pure returns (bytes32) {
         if (input.length < 32) {
             return keccak256(input);
@@ -255,6 +264,22 @@ contract ProvethVerifier {
         }
     }
 
+    /// @dev Validates a Merkle-Patricia-Trie proof.
+    ///      If the proof proves the inclusion of some key-value pair in the
+    ///      trie, the value is returned. Otherwise, i.e. if the proof proves
+    ///      the exclusion of a key from the trie, an empty byte array is
+    ///      returned.
+    /// @param rootHash is the Keccak-256 hash of the root node of the MPT.
+    /// @param mptPath is the path (consisting of nibbles) to the node whose
+    ///        inclusion we are proving. For proofs of exclusion, mptPath is
+    ///        the longest prefix of the path of the element that is present
+    ///        in the tree.
+    /// @param stackIndexes is a list of indexes into stack that tell the
+    ///        verifier which element of each node to access.
+    /// @param stack is the stack of MPT nodes (starting with the root) that
+    ///        need to be traversed during verification.
+    /// @return value whose inclusion is proved or an empty byte array for
+    ///         a proof of exclusion
     function validateMPTProof(
         bytes32 rootHash,
         bytes mptPath,
@@ -272,34 +297,50 @@ contract ProvethVerifier {
         RLP.RLPItem memory rlpValue;
 
         if (stack.length == 0) {
-            // Root hash of empty tx trie
+            // Root hash of empty Merkle-Patricia-Trie
             require(rootHash == 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421);
             return new bytes(0);
         }
 
+        // Traverse stack of nodes starting at root.
         for (uint i = 0; i < stack.length; i++) {
 
             // We use the fact that an rlp encoded list consists of some
             // encoding of its length plus the concatenation of its
             // *rlp-encoded* items.
             rlpNode = stack[i].toBytes();
+            // The root node is hashed with Keccak-256 ...
             if (i == 0 && rootHash != keccak256(rlpNode)) {
                 revert();
             }
+            // ... whereas all other nodes are hashed with the MPT
+            // hash function.
             if (i != 0 && nodeHashHash != mptHashHash(rlpNode)) {
                 revert();
             }
+            // We verified that stack[i] has the correct hash, so we
+            // may safely decode it.
             node = stack[i].toList();
 
             if (node.length == 2) {
                 // Extension or Leaf node
+
                 bytes memory nodePath = merklePatriciaCompactDecode(node[0].toData());
 
                 uint prefixLength = sharedPrefixLength(mptPathOffset, mptPath, nodePath);
                 mptPathOffset += prefixLength;
 
                 if (stackIndexes[i] == 0xff) {
-                    // proof claims divergent extension or leaf
+                    // Proof claims divergent extension or leaf. (Only
+                    // relevant for proofs of exclusion.)
+                    // An Extension/Leaf node is divergent iff it "skips" over
+                    // the point at which a Branch node should have been had the
+                    // excluded key been included in the trie.
+                    // Example: Imagine a proof of exclusion for path [1, 4],
+                    // where the current node is a Leaf node with
+                    // path [1, 3, 3, 7]. For [1, 4] to be included, there
+                    // should have been a Branch node at [1] with a child
+                    // at 3 and a child at 4.
 
                     if (i < stack.length - 1) {
                         // divergent node must come last in proof
@@ -319,20 +360,27 @@ contract ProvethVerifier {
                     return new bytes(0);
                 } else if (stackIndexes[i] == 1) {
                     if (prefixLength != nodePath.length) {
-                        // node is divergent
+                        // node is divergent, but stack index isn't 0xff.
                         revert();
                     }
 
                     if (i < stack.length - 1) {
-                        // not last level
+                        // not last level, must be Extension node
+
                         if (node[uint(stackIndexes[i])].isData()) {
+                            // rlp(child) was at least 32 bytes. node[1] contains
+                            // Keccak256(rlp(child)).
                             nodeHashHash = keccak256(node[uint(stackIndexes[i])].toData());
                         } else {
+                            // rlp(child) was at less than 32 bytes. node[1] contains
+                            // rlp(child).
                             nodeHashHash = keccak256(node[uint(stackIndexes[i])].toBytes());
                         }
                     } else {
-                        // didn't consume entire mptPath
+                        // last level, must be Leaf node
+
                         if (mptPathOffset != mptPath.length) {
+                            // didn't consume entire mptPath
                             revert();
                         }
 
@@ -345,6 +393,7 @@ contract ProvethVerifier {
                 }
             } else if (node.length == 17) {
                 // Branch node
+
                 if (stackIndexes[i] < 16) {
                     // advance mptPathOffset
                     if (mptPathOffset >= mptPath.length || mptPath[mptPathOffset] != stackIndexes[i]) {
@@ -354,6 +403,7 @@ contract ProvethVerifier {
 
                     if (i < stack.length - 1) {
                         // not last level
+
                         if (node[uint(stackIndexes[i])].isData()) {
                             nodeHashHash = keccak256(node[uint(stackIndexes[i])].toData());
                         } else {
@@ -361,8 +411,12 @@ contract ProvethVerifier {
                         }
                     } else {
                         // last level
-                        // must have an empty hash, everything else is invalid
+
                         if (node[uint(stackIndexes[i])].toData().length != 0) {
+                            // hash isn't empty, but should be since this a proof
+                            // of exclusion: we're at the last level of the proof
+                            // and the stack index points to one of the child nodes
+                            // rather than a value
                             revert();
                         }
 
@@ -387,6 +441,7 @@ contract ProvethVerifier {
                     rlpValue = node[uint(stackIndexes[i])];
                     return rlpValue.toData();
                 } else {
+                    // index cannot be greater than 16
                     revert();
                 }
             } else {
