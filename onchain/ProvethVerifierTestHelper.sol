@@ -61,24 +61,21 @@ contract ProvethVerifierTestHelper is ProvethVerifier {
         return merklePatriciaCompactDecode(compact);
     }
 
-    // function exposedValidateMPTProof(
-    //     bytes32 rootHash,
-    //     bytes mptPath,
-    //     bytes stackIndexes,
-    //     RLP.RLPItem[] stack
-    // ) returns (bool valid, bytes value) {
-    //     bytes memory memValue;
-    //     (valid, memValue) = validateMPTProof(
-    //         rootHash,
-    //         mptPath,
-    //         stackIndexes,
-    //         stack);
-    //     if (valid) {
-    //         return (valid, memValue);
-    //     } else {
-    //         return (valid, new bytes(0));
-    //     }
-    // }
+    function exposedValidateMPTProof(
+        bytes32 rootHash,
+        bytes mptPath,
+        bytes stackIndexes,
+        bytes rlpStack
+        // RLPReader.RLPItem[] stack
+    ) returns (bytes value) {
+        bytes memory memValue;
+        memValue = validateMPTProof(
+            rootHash,
+            mptPath,
+            stackIndexes,
+            RLPReader.toList(RLPReader.toRlpItem(rlpStack)));
+        return memValue;
+    }
 
     function exposedSharedPrefixLength(uint xsOffset, bytes xs, bytes ys) returns (uint) {
         return sharedPrefixLength(xsOffset, xs, ys);
