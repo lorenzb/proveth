@@ -10,6 +10,8 @@ from ethereum import config
 from ethereum.tools import tester as t
 from ethereum.utils import mk_contract_address, checksum_encode
 import rlp
+import trie
+import trie.utils.nibbles
 
 from test_utils import rec_hex, rec_bin, deploy_solidity_contract
 
@@ -380,6 +382,27 @@ class TestVerifier(unittest.TestCase):
         self.assertEqual(r, tx['r'])
         self.assertEqual(s, tx['s'])
         self.assertEqual(contract_creation, False)
+
+    def test_validateMPTProof(self):
+        key = bytes([127])
+        value = b'hello'
+        mpt = trie.HexaryTrie(db={})
+        mpt.set(key, value)
+
+        mpt_key_nibbles = trie.utils.nibbles.bytes_to_nibbles(rlp.encode(key))
+        mpt_path, stack_indexes, stack = proveth.generate_proof(mpt, mpt_key_nibbles)
+        self.assertEqual(mpt_path, [7, 15])
+        # Truncate to produce invalid proof of exclusion.
+        mpt_path = [7]
+        stack_indexes = [0xff]
+
+        with self.assertRaises(t.TransactionFailed):
+            self.verifier_contract.exposedValidateMPTProof(
+                mpt.root_hash,
+                bytes(mpt_path),
+                bytes(stack_indexes),
+                rlp.encode(stack),
+            )
 
 
 if __name__ == '__main__':
