@@ -57,22 +57,19 @@ contract ProvethVerifierTestHelper is ProvethVerifier {
     }
 
 
-    function exposedMerklePatriciaCompactDecode(bytes compact) returns (bytes nibbles) {
+    function exposedMerklePatriciaCompactDecode(bytes compact) returns (bool isLeaf, bytes nibbles) {
         return merklePatriciaCompactDecode(compact);
     }
 
     function exposedValidateMPTProof(
         bytes32 rootHash,
         bytes mptPath,
-        bytes stackIndexes,
         bytes rlpStack
-        // RLPReader.RLPItem[] stack
     ) returns (bytes value) {
         bytes memory memValue;
         memValue = validateMPTProof(
             rootHash,
             mptPath,
-            stackIndexes,
             RLPReader.toList(RLPReader.toRlpItem(rlpStack)));
         return memValue;
     }

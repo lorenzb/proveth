@@ -144,16 +144,14 @@ def rlp_transaction(tx_dict: dict):
 
 
 def generate_proof(mpt, mpt_key_nibbles: bytes):
-    if not all(nibble < 16 for nibble in mpt_key_nibbles):
+    if not all(0 <= nibble < 16 for nibble in mpt_key_nibbles):
         raise ValueError("mpt_key_nibbles has non-nibble elements {}".format(str(mpt_key_nibbles)))
     EMPTY = 128
     stack_indexes = []
-    mpt_path = []
     stack = []
 
     def aux(node_hash, mpt_key_nibbles):
         nonlocal stack_indexes
-        nonlocal mpt_path
         nonlocal stack
 
         node = mpt.get_node(node_hash)
@@ -168,7 +166,6 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
                 i = mpt_key_nibbles[0]
                 stack_indexes.append(i)
                 stack.append(node)
-                mpt_path.append(i)
                 aux(node[i], mpt_key_nibbles[1:])
             else:
                 i = 16
@@ -184,7 +181,6 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
                     print("Non-divergent leaf/extension")
                 stack_indexes.append(1)
                 stack.append(node)
-                mpt_path += prefix
                 if get_node_type(node) == NODE_TYPE_EXTENSION:
                     aux(node[1], mpt_key_nibbles_remainder)
             else:
@@ -192,7 +188,6 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
                     print("Divergent leaf/extension")
                 stack_indexes.append(0xff)
                 stack.append(node)
-                mpt_path += prefix
         else:
             raise ValueError("Unknown node type: {}".format(get_node_type(node)))
 
@@ -208,9 +203,8 @@ def generate_proof(mpt, mpt_key_nibbles: bytes):
         print('key nibbles: ', mpt_key_nibbles)
         print('Stack:       ', rec_hex(stack))
         print('StackIndexes:', stack_indexes)
-        print('mpt_path:    ', mpt_path)
 
-    return (mpt_path, stack_indexes, stack)
+    return stack
 
 def generate_proof_blob(block_dict, tx_index):
     header = block_header(block_dict)
@@ -224,14 +218,12 @@ def generate_proof_blob(block_dict, tx_index):
         raise ValueError("Tx trie root hash does not match. Calculated: {} Sent: {}".format(mpt.root_hash.hex(), normalize_bytes(block_dict['transactionsRoot']).hex()))
 
     mpt_key_nibbles = bytes_to_nibbles(rlp.encode(tx_index))
-    mpt_path, stack_indexes, stack = generate_proof(mpt, mpt_key_nibbles)
+    stack = generate_proof(mpt, mpt_key_nibbles)
 
     proof_blob = rlp.encode([
         1, # proof_type
         header,
         tx_index,
-        bytes(mpt_path),
-        bytes(stack_indexes),
         stack,
     ])
     return proof_blob
