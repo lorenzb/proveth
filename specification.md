@@ -24,12 +24,16 @@ The zeroth element of the list is a uint that specifies the *kind* of proof the 
 [kind, actual proof...]
 ```
 
-## Proof of transaction inclusion/exclusion
+Currently we support two types of proofs:
+- Type `1` proofs of inclusion/exclusion for the transaction requests aka transactions.
+- Type `2` proofs of inclusion/exclusion for the transaction outcomes aka transactions receipts.
 
-A proof of inclusion proves a statement of the form "the given transaction is present at the given index in the given block". A proof of exclusion proves a statement of the form "there is no transaction at the given index in the given block".
+## Proof of transaction (receipt) inclusion/exclusion
+
+A proof of inclusion proves a statement of the form "the given transaction is present at the given index in the given block". A proof of exclusion proves a statement of the form "there is no transaction at the given index in the given block". Replace "transaction" with "transaction receipt" in the previous sentence in case of a proof of type 2.
 
 A proof consists of 6 elements:
-- 0: *kind* always equals `1` for this kind of proof
+- 0: *kind* equals `1` for transactions and equals `2` for transactions receipts.
 - 1: *consensus block header*, consisting of
    ```
    [<hash of previous block>,
