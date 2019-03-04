@@ -149,20 +149,6 @@ contract ProvethVerifier {
         return (isLeaf, decodeNibbles(compact, skipNibbles));
     }
 
-    function isPrefix(bytes prefix, bytes full) internal pure returns (bool) {
-        if (prefix.length > full.length) {
-            return false;
-        }
-
-        for (uint i = 0; i < prefix.length; i += 1) {
-            if (prefix[i] != full[i]) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     function sharedPrefixLength(uint xsOffset, bytes xs, bytes ys) internal pure returns (uint) {
         for (uint i = 0; i + xsOffset < xs.length && i < ys.length; i++) {
             if (xs[i + xsOffset] != ys[i]) {

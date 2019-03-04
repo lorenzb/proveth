@@ -123,14 +123,6 @@ class TestVerifier(unittest.TestCase):
             self.verifier_contract.exposedSharedPrefixLength(4, b'aaaa', b'aaaa'),
             0)
 
-    def test_isPrefix(self):
-        self.assertTrue(
-            self.verifier_contract.exposedIsPrefix(b'', b''))
-        self.assertFalse(
-            self.verifier_contract.exposedIsPrefix(b'a', b''))
-        self.assertTrue(
-            self.verifier_contract.exposedIsPrefix(b'abc', b'abcdef'))
-
     def test_merklePatriciaCompactDecode(self):
         self.assertEqual(
             [False, utils.decode_hex('')],

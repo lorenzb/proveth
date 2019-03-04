@@ -77,8 +77,4 @@ contract ProvethVerifierTestHelper is ProvethVerifier {
     function exposedSharedPrefixLength(uint xsOffset, bytes xs, bytes ys) returns (uint) {
         return sharedPrefixLength(xsOffset, xs, ys);
     }
-
-    function exposedIsPrefix(bytes prefix, bytes full) returns (bool) {
-        return isPrefix(prefix, full);
-    }
 }
