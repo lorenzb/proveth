@@ -10,6 +10,8 @@ from ethereum import config
 from ethereum.tools import tester as t
 from ethereum.utils import mk_contract_address, checksum_encode
 import rlp
+import trie
+import trie.utils.nibbles
 
 from test_utils import rec_hex, rec_bin, deploy_solidity_contract
 
@@ -121,33 +123,74 @@ class TestVerifier(unittest.TestCase):
             self.verifier_contract.exposedSharedPrefixLength(4, b'aaaa', b'aaaa'),
             0)
 
-    def test_isPrefix(self):
-        self.assertTrue(
-            self.verifier_contract.exposedIsPrefix(b'', b''))
-        self.assertFalse(
-            self.verifier_contract.exposedIsPrefix(b'a', b''))
-        self.assertTrue(
-            self.verifier_contract.exposedIsPrefix(b'abc', b'abcdef'))
-
     def test_merklePatriciaCompactDecode(self):
         self.assertEqual(
-            utils.decode_hex(''),
+            [False, utils.decode_hex('')],
             self.verifier_contract.exposedMerklePatriciaCompactDecode(utils.decode_hex('00')))
         self.assertEqual(
-            utils.decode_hex('00'),
+            [False, utils.decode_hex('00')],
             self.verifier_contract.exposedMerklePatriciaCompactDecode(utils.decode_hex('10')))
         self.assertEqual(
-            utils.decode_hex('0102030405'),
+            [False, utils.decode_hex('0102030405')],
             self.verifier_contract.exposedMerklePatriciaCompactDecode(utils.decode_hex('112345')))
         self.assertEqual(
-            utils.decode_hex('000102030405'),
+            [False, utils.decode_hex('000102030405')],
             self.verifier_contract.exposedMerklePatriciaCompactDecode(utils.decode_hex('00012345')))
         self.assertEqual(
-            utils.decode_hex('000f010c0b08'),
+            [True, utils.decode_hex('000f010c0b08')],
             self.verifier_contract.exposedMerklePatriciaCompactDecode(utils.decode_hex('200f1cb8')))
         self.assertEqual(
-            utils.decode_hex('0f010c0b08'),
+            [True, utils.decode_hex('0f010c0b08')],
             self.verifier_contract.exposedMerklePatriciaCompactDecode(utils.decode_hex('3f1cb8')))
+
+    def test_validateMPTProof(self):
+        def assert_at_mpt_key(mpt, mpt_key, value):
+            mpt_key = bytes(mpt_key)
+            stack = proveth.generate_proof(mpt, mpt_key)
+            self.assertEqual(
+                self.verifier_contract.exposedValidateMPTProof(
+                    mpt.root_hash,
+                    bytes(mpt_key),
+                    rlp.encode(stack),
+                ),
+                value)
+
+        mpt = trie.HexaryTrie(db={})
+
+        # empty trie
+        assert_at_mpt_key(mpt, [], b'')
+        assert_at_mpt_key(mpt, [1], b'')
+        assert_at_mpt_key(mpt, [1, 2], b'')
+        assert_at_mpt_key(mpt, [1, 2, 3], b'')
+        assert_at_mpt_key(mpt, [1, 2, 3, 4], b'')
+
+        # trie with one element
+        key = bytes([127])
+        mpt_key = list(trie.utils.nibbles.bytes_to_nibbles(rlp.encode(key)))
+        value = b'hello'
+        mpt.set(key, value)
+
+        self.assertEqual(mpt_key, [7, 15])
+        assert_at_mpt_key(mpt, mpt_key, b'hello')
+        assert_at_mpt_key(mpt, [], b'')
+        assert_at_mpt_key(mpt, [6], b'')
+        assert_at_mpt_key(mpt, [7], b'')
+        assert_at_mpt_key(mpt, [7, 14], b'')
+        assert_at_mpt_key(mpt, [7, 15, 0], b'')
+
+        # trie with two elements
+        key = bytes([126])
+        mpt_key = list(trie.utils.nibbles.bytes_to_nibbles(rlp.encode(key)))
+        value = b'bonjour'
+        mpt.set(key, value)
+
+        self.assertEqual(mpt_key, [7, 14])
+        assert_at_mpt_key(mpt, mpt_key, b'bonjour')
+        assert_at_mpt_key(mpt, [7, 15], b'hello')
+        assert_at_mpt_key(mpt, [], b'')
+        assert_at_mpt_key(mpt, [6], b'')
+        assert_at_mpt_key(mpt, [7], b'')
+        assert_at_mpt_key(mpt, [7, 14, 0], b'')
 
     def test_manual1(self):
         # from block 1322230 on ropsten
@@ -171,8 +214,6 @@ class TestVerifier(unittest.TestCase):
                 '61ebb9e58c93ac26',
             ],
             '01',
-            '0001',
-            '000101',
             [
                 ['da42945ae3c75118e89abff39ad566fd0a30b574e5df8ae70ce59d4cc5f19cb1', '', '', '', '', '', '', '', 'ca85a0d0ed219e8583feadf2dce0a73aa05e7d6a790c32efcc1dd6c901195f16', '', '', '', '', '', '', '', ''],
                 ['', 'e61bb422a77353192ae2b4b29c3773b018da71d1425b2a48cca04d7da9917fab', '6b46aad90e0a9eeede8f2ad992401e52b3e52ce7d5bf723a48922401d5af95cc', '997f63912b72cdf8a907025644e1df51c313015c4e9e51500fa6ffa52241eef4', '5ad4d0c46a043da4e1da601955a1d29d5bd3b6c5b2dfc2776c8a898f998af498', '457048648440cf69193e770035a2df6f42ab5a6b8bc4d789a92074dc2beb2091', '', '', '', '', '', '', '', '', '', '', ''],
@@ -209,38 +250,26 @@ class TestVerifier(unittest.TestCase):
         assert_failed_call(modified_decoded_proof_blob)
 
         modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
-        modified_decoded_proof_blob[3] = '0101'
+        modified_decoded_proof_blob[3][0][0] = 'da42945ae3c75118e89abff39ad566fd0a30b574e5df8ae70ce59d4cc5f19cb2'
         assert_failed_call(modified_decoded_proof_blob)
 
         modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
-        modified_decoded_proof_blob[3] = '000100'
+        modified_decoded_proof_blob[3][1][1] = 'e61bb422a77353192ae2b4b29c3773b018da71d1425b2a48cca04d7da9917fac'
         assert_failed_call(modified_decoded_proof_blob)
 
         modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
-        modified_decoded_proof_blob[4] = '0001ff'
+        modified_decoded_proof_blob[3][2][0] = '21'
         assert_failed_call(modified_decoded_proof_blob)
 
         modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
-        modified_decoded_proof_blob[5][0][0] = 'da42945ae3c75118e89abff39ad566fd0a30b574e5df8ae70ce59d4cc5f19cb2'
-        assert_failed_call(modified_decoded_proof_blob)
-
-        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
-        modified_decoded_proof_blob[5][1][1] = 'e61bb422a77353192ae2b4b29c3773b018da71d1425b2a48cca04d7da9917fac'
-        assert_failed_call(modified_decoded_proof_blob)
-
-        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
-        modified_decoded_proof_blob[5][2][0] = '21'
-        assert_failed_call(modified_decoded_proof_blob)
-
-        modified_decoded_proof_blob = copy.deepcopy(decoded_proof_blob)
-        modified_decoded_proof_blob[5][2][1] = modified_decoded_proof_blob[5][2][1].replace(
+        modified_decoded_proof_blob[3][2][1] = modified_decoded_proof_blob[3][2][1].replace(
             'e733ca974e69646100000000000000000000000000000000000000000000000000000000',
             'f733ca974e69646100000000000000000000000000000000000000000000000000000000')
         assert_failed_call(modified_decoded_proof_blob)
 
 
     def test_manual2(self):
-        proof_blob = utils.decode_hex('f904c601f90203a0e7c29816452c474e261b1d02d3bab489df00069892863bc654ddd609b7f7fc4ba01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d4934794b2930b35844a230f00e51431acae96fe543a0347a00272d32e39cf493242e079965942776e1a6492e74532eb25d5ed8f56aab40331a01b0134ed566a1bf54f29bd55929b75139de4450d8bf43d33b02a1b26b4873af6a0b9b5d8d9f58ad6b835be1b1bde2461e809905257c2610329fe94de5109c2cfadb9010003424803034030147969000005008084532a1c8a0020000400000424302c0578310012204d0883204010ca0000401800020448800000909104008110e02b006000060142000000994112c20924a0200002820020002402000801001020004412203000281600200000c1802940080a1c0010a029080410408a0020150400681c32020104600800004400100900032840000285000800209440420209010500800606200010420003050010100064884080000c23a02080c130028054a401080040086402088c0252005c00000000e82000406005824800412011200c2020a0010810000901120010020c08c4a000828440040008a004608950810200c208008887090e046147907c834c4d6b837a11d38379ca58845a709667827331a0915aa3cd5dea74d24e39ffd6acc5da3b2b692d4b3fcc6cc26222b9205fd64b46880eb2c4f807cb142481828408010802850801010201f902aff90131a08e61195faa58f0c8467b7f62a15ec6122d7f9484021eaf7b9fe372fffde310b8a05b9674e1d977f6a30fc12a9ac35aeecbbe0d49dcc0d8952e5d833539504ca649a05262513c779d4d62f559300126b4a34435923dceadd291ec3e1d4da6d284b8fca0672d7beb02403cbf570f2aa2956d3d6a8be5b928a425ee263e744db509958d06a0cb1005949f6f4f14beeaf39c9ee07fc2cf68fcb804aaecc4168828bb265f3f1ca0d89a971d2813936524ef4e38ee2dd300cf02764bec57845b8c0064118246ab97a014d80d349c773c690ef2711a7c4c916cec6a333594d378d2b6cebf2bff1c9ce2a0a932d14ab39608d22c0ba8a0e2fafa8a9359968f29b34827cff06e3cc5d0fdeea059d69a507142ffd21a40f829f094f283758e8a32b077c8373a6215cc0e0d61328080808080808080f851a0af2178a9930004f22ee1e2eb87f1035e559971de937dc9ae6f6ba7b6640df2a7a0d92a714520fe45d10652c6b429ca037104644bae3fe13edb8e52b2efb645e16a808080808080808080808080808080e218a01bf683031aaa6ef9c75509021a8ba5f4c9eb6f134413d57b2d3ae92699f58d95f891a06b621312dca8604610878ecf0384c9855dd6e388a0d587441be1dedfe2c73804a0530e3712b1763a989ef0b80b5a90619e7b0452069f1cf4ba3be0a7459a8654cca05f174cd7f8bd7be186b9f8127e181be52bb94cc662f36a8ec1fa3c6083db0ec7a0d94d6ab7f87669a948645e2191b193672be0720018f15115e71720140a027f3e80808080808080808080808080f87020b86df86b821935843b9aca00825208944ce3adf23418a3c3f4a61cde1c7057677befd9bf86719a2d5d6e008025a0121772bdbd0945dcfea42152186b9f7ae6d0271fdd6d1777fcadf5383a88336ca021196e93025480173f429c9e9a27c1921dd6c10b3705c30125424285250bd5a5')
+        proof_blob = utils.decode_hex('f904bb01f90203a0e7c29816452c474e261b1d02d3bab489df00069892863bc654ddd609b7f7fc4ba01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d4934794b2930b35844a230f00e51431acae96fe543a0347a00272d32e39cf493242e079965942776e1a6492e74532eb25d5ed8f56aab40331a01b0134ed566a1bf54f29bd55929b75139de4450d8bf43d33b02a1b26b4873af6a0b9b5d8d9f58ad6b835be1b1bde2461e809905257c2610329fe94de5109c2cfadb9010003424803034030147969000005008084532a1c8a0020000400000424302c0578310012204d0883204010ca0000401800020448800000909104008110e02b006000060142000000994112c20924a0200002820020002402000801001020004412203000281600200000c1802940080a1c0010a029080410408a0020150400681c32020104600800004400100900032840000285000800209440420209010500800606200010420003050010100064884080000c23a02080c130028054a401080040086402088c0252005c00000000e82000406005824800412011200c2020a0010810000901120010020c08c4a000828440040008a004608950810200c208008887090e046147907c834c4d6b837a11d38379ca58845a709667827331a0915aa3cd5dea74d24e39ffd6acc5da3b2b692d4b3fcc6cc26222b9205fd64b46880eb2c4f807cb14248182f902aff90131a08e61195faa58f0c8467b7f62a15ec6122d7f9484021eaf7b9fe372fffde310b8a05b9674e1d977f6a30fc12a9ac35aeecbbe0d49dcc0d8952e5d833539504ca649a05262513c779d4d62f559300126b4a34435923dceadd291ec3e1d4da6d284b8fca0672d7beb02403cbf570f2aa2956d3d6a8be5b928a425ee263e744db509958d06a0cb1005949f6f4f14beeaf39c9ee07fc2cf68fcb804aaecc4168828bb265f3f1ca0d89a971d2813936524ef4e38ee2dd300cf02764bec57845b8c0064118246ab97a014d80d349c773c690ef2711a7c4c916cec6a333594d378d2b6cebf2bff1c9ce2a0a932d14ab39608d22c0ba8a0e2fafa8a9359968f29b34827cff06e3cc5d0fdeea059d69a507142ffd21a40f829f094f283758e8a32b077c8373a6215cc0e0d61328080808080808080f851a0af2178a9930004f22ee1e2eb87f1035e559971de937dc9ae6f6ba7b6640df2a7a0d92a714520fe45d10652c6b429ca037104644bae3fe13edb8e52b2efb645e16a808080808080808080808080808080e218a01bf683031aaa6ef9c75509021a8ba5f4c9eb6f134413d57b2d3ae92699f58d95f891a06b621312dca8604610878ecf0384c9855dd6e388a0d587441be1dedfe2c73804a0530e3712b1763a989ef0b80b5a90619e7b0452069f1cf4ba3be0a7459a8654cca05f174cd7f8bd7be186b9f8127e181be52bb94cc662f36a8ec1fa3c6083db0ec7a0d94d6ab7f87669a948645e2191b193672be0720018f15115e71720140a027f3e80808080808080808080808080f87020b86df86b821935843b9aca00825208944ce3adf23418a3c3f4a61cde1c7057677befd9bf86719a2d5d6e008025a0121772bdbd0945dcfea42152186b9f7ae6d0271fdd6d1777fcadf5383a88336ca021196e93025480173f429c9e9a27c1921dd6c10b3705c30125424285250bd5a5')
         block_hash = utils.decode_hex('23d2df699671ac564b382f5b046e0cf533ebc44ab8e36426cef9d60486c3a220')
         result, index, nonce, gas_price, gas, to, value, data, v, r, s, contract_creation = self.verifier_contract.txProof(
             block_hash,
@@ -267,7 +296,6 @@ class TestVerifier(unittest.TestCase):
             self.assertEqual(result, PRESENT if present else ABSENT)
             self.assertEqual(index, i)
             if present:
-
                 self.assertEqual(nonce, utils.parse_as_int(block_dict['transactions'][i]['nonce']))
                 self.assertEqual(gas_price, utils.parse_as_int(block_dict['transactions'][i]['gasPrice']))
                 self.assertEqual(gas, utils.parse_as_int(block_dict['transactions'][i]['gas']))
@@ -346,8 +374,6 @@ class TestVerifier(unittest.TestCase):
 
         proof_type = 1
         tx_index = 0
-        mpt_path = "0x0800"
-        stack_indexes = "0x0801"
         stack = [
             ['da42945ae3c75118e89abff39ad566fd0a30b574e5df8ae70ce59d4cc5f19cb1', '', '', '', '', '', '', '', 'ca85a0d0ed219e8583feadf2dce0a73aa05e7d6a790c32efcc1dd6c901195f16', '', '', '', '', '', '', '', ''],
             ['30', rec_hex(rlp.encode(list(tx.values())))],
@@ -357,8 +383,6 @@ class TestVerifier(unittest.TestCase):
             proof_type,
             block_header,
             tx_index,
-            mpt_path,
-            stack_indexes,
             stack,
         ]))
 
@@ -380,7 +404,6 @@ class TestVerifier(unittest.TestCase):
         self.assertEqual(r, tx['r'])
         self.assertEqual(s, tx['s'])
         self.assertEqual(contract_creation, False)
-
 
 if __name__ == '__main__':
     unittest.main()

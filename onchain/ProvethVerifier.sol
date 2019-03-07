@@ -43,6 +43,19 @@ contract ProvethVerifier {
         return b == 0x80 /* empty byte string */ || b == 0xc0 /* empty list */;
     }
 
+    function isEmptyBytesequence(RLPReader.RLPItem memory item) internal pure returns (bool) {
+        if (item.len != 1) {
+            return false;
+        }
+        uint8 b;
+        uint memPtr = item.memPtr;
+        assembly {
+            b := byte(0, mload(memPtr))
+        }
+        return b == 0x80 /* empty byte string */;
+    }
+
+
     function decodeUnsignedTx(bytes rlpUnsignedTx) internal pure returns (UnsignedTransaction memory t) {
         RLPReader.RLPItem[] memory fields = rlpUnsignedTx.toRlpItem().toList();
         require(fields.length == 6);
@@ -66,8 +79,6 @@ contract ProvethVerifier {
         );
     }
 
-    // TODO(lorenzb): This should actually be pure, not view. Probably because
-    // wrong declarations in RLP.sol.
     function decodeSignedTx(bytes rlpSignedTx) internal pure returns (SignedTransaction memory t) {
         RLPReader.RLPItem[] memory fields = rlpSignedTx.toRlpItem().toList();
         address potentialAddress;
@@ -115,37 +126,27 @@ contract ProvethVerifier {
         assert(nibblesLength == nibbles.length);
     }
 
-    function merklePatriciaCompactDecode(bytes compact) internal pure returns (bytes memory nibbles) {
+    function merklePatriciaCompactDecode(bytes compact) internal pure returns (bool isLeaf, bytes memory nibbles) {
         require(compact.length > 0);
         uint first_nibble = uint8(compact[0]) >> 4 & 0xF;
         uint skipNibbles;
         if (first_nibble == 0) {
             skipNibbles = 2;
+            isLeaf = false;
         } else if (first_nibble == 1) {
             skipNibbles = 1;
+            isLeaf = false;
         } else if (first_nibble == 2) {
             skipNibbles = 2;
+            isLeaf = true;
         } else if (first_nibble == 3) {
             skipNibbles = 1;
+            isLeaf = true;
         } else {
             // Not supposed to happen!
             revert();
         }
-        return decodeNibbles(compact, skipNibbles);
-    }
-
-    function isPrefix(bytes prefix, bytes full) internal pure returns (bool) {
-        if (prefix.length > full.length) {
-            return false;
-        }
-
-        for (uint i = 0; i < prefix.length; i += 1) {
-            if (prefix[i] != full[i]) {
-                return false;
-            }
-        }
-
-        return true;
+        return (isLeaf, decodeNibbles(compact, skipNibbles));
     }
 
     function sharedPrefixLength(uint xsOffset, bytes xs, bytes ys) internal pure returns (uint) {
@@ -163,22 +164,21 @@ contract ProvethVerifier {
         bytes32 txRootHash;
         bytes rlpTxIndex;
         uint txIndex;
-        bytes mptPath;
-        bytes stackIndexes;
+        bytes mptKey;
         RLPReader.RLPItem[] stack;
     }
 
     function decodeProofBlob(bytes proofBlob) internal pure returns (Proof memory proof) {
         RLPReader.RLPItem[] memory proofFields = proofBlob.toRlpItem().toList();
+        bytes memory rlpTxIndex = proofFields[2].toRlpBytes();
         proof = Proof(
             proofFields[0].toUint(),
             proofFields[1].toRlpBytes(),
             bytes32(proofFields[1].toList()[TX_ROOT_HASH_INDEX].toUint()),
-            proofFields[2].toRlpBytes(),
+            rlpTxIndex,
             proofFields[2].toUint(),
-            proofFields[3].toBytes(),
-            proofFields[4].toBytes(),
-            proofFields[5].toList()
+            decodeNibbles(rlpTxIndex, 0),
+            proofFields[3].toList()
         );
     }
 
@@ -195,7 +195,7 @@ contract ProvethVerifier {
         uint256 gasprice,
         uint256 startgas,
         address to, // 20 byte address for "regular" tx,
-                  // empty for contract creation tx
+                    // empty for contract creation tx
         uint256 value,
         bytes data,
         uint256 v,
@@ -224,7 +224,6 @@ contract ProvethVerifier {
         result = 0;
         index = 0;
         Proof memory proof = decodeProofBlob(proofBlob);
-        require(proof.stack.length == proof.stackIndexes.length);
         if (proof.kind != 1) {
             revert();
         }
@@ -233,28 +232,19 @@ contract ProvethVerifier {
             revert();
         }
 
-        bytes memory rlpTx = validateMPTProof(proof.txRootHash, proof.mptPath, proof.stackIndexes, proof.stack);
 
-        bytes memory mptKeyNibbles = decodeNibbles(proof.rlpTxIndex, 0);
+        bytes memory rlpTx = validateMPTProof(proof.txRootHash, proof.mptKey, proof.stack);
+
         if (rlpTx.length == 0) {
             // empty node
-            if (isPrefix(proof.mptPath, mptKeyNibbles)) {
-                result = TX_PROOF_RESULT_ABSENT;
-                index = proof.txIndex;
-                return;
-            } else {
-                revert();
-            }
+            result = TX_PROOF_RESULT_ABSENT;
+            index = proof.txIndex;
+            return;
         } else {
-            // tx
-            if (isPrefix(proof.mptPath, mptKeyNibbles) && proof.mptPath.length == mptKeyNibbles.length) {
-                result = TX_PROOF_RESULT_PRESENT;
-                index = proof.txIndex;
-                t  = decodeSignedTx(rlpTx);
-                return;
-            } else {
-                revert();
-            }
+            result = TX_PROOF_RESULT_PRESENT;
+            index = proof.txIndex;
+            t  = decodeSignedTx(rlpTx);
+            return;
         }
     }
 
@@ -281,25 +271,20 @@ contract ProvethVerifier {
     ///      the exclusion of a key from the trie, an empty byte array is
     ///      returned.
     /// @param rootHash is the Keccak-256 hash of the root node of the MPT.
-    /// @param mptPath is the path (consisting of nibbles) to the node whose
-    ///        inclusion we are proving. For proofs of exclusion, mptPath is
-    ///        the longest prefix of the path of the element that is present
-    ///        in the tree.
-    /// @param stackIndexes is a list of indexes into stack that tell the
-    ///        verifier which element of each node to access.
+    /// @param mptKey is the key (consisting of nibbles) of the node whose
+    ///        inclusion/exclusion we are proving.
     /// @param stack is the stack of MPT nodes (starting with the root) that
     ///        need to be traversed during verification.
     /// @return value whose inclusion is proved or an empty byte array for
     ///         a proof of exclusion
     function validateMPTProof(
         bytes32 rootHash,
-        bytes mptPath,
-        bytes stackIndexes,
+        bytes mptKey,
         RLPReader.RLPItem[] memory stack
     ) internal pure returns (bytes memory value) {
-        require(stackIndexes.length == stack.length);
+        // require(stackIndexes.length == stack.length);
 
-        uint mptPathOffset = 0;
+        uint mptKeyOffset = 0;
 
         bytes32 nodeHashHash;
         bytes memory rlpNode;
@@ -336,12 +321,14 @@ contract ProvethVerifier {
             if (node.length == 2) {
                 // Extension or Leaf node
 
-                bytes memory nodePath = merklePatriciaCompactDecode(node[0].toBytes());
+                bool isLeaf;
+                bytes memory nodeKey;
+                (isLeaf, nodeKey) = merklePatriciaCompactDecode(node[0].toBytes());
 
-                uint prefixLength = sharedPrefixLength(mptPathOffset, mptPath, nodePath);
-                mptPathOffset += prefixLength;
+                uint prefixLength = sharedPrefixLength(mptKeyOffset, mptKey, nodeKey);
+                mptKeyOffset += prefixLength;
 
-                if (stackIndexes[i] == 0xff) {
+                if (prefixLength < nodeKey.length) {
                     // Proof claims divergent extension or leaf. (Only
                     // relevant for proofs of exclusion.)
                     // An Extension/Leaf node is divergent iff it "skips" over
@@ -353,115 +340,82 @@ contract ProvethVerifier {
                     // should have been a Branch node at [1] with a child
                     // at 3 and a child at 4.
 
+                    // Sanity check
                     if (i < stack.length - 1) {
                         // divergent node must come last in proof
                         revert();
                     }
 
-                    if (prefixLength == nodePath.length) {
-                        // node isn't divergent
-                        revert();
-                    }
-
-                    if (mptPathOffset != mptPath.length) {
-                        // didn't consume entire mptPath
-                        revert();
-                    }
-
                     return new bytes(0);
-                } else if (stackIndexes[i] == 1) {
-                    if (prefixLength != nodePath.length) {
-                        // node is divergent, but stack index isn't 0xff.
+                }
+
+                if (isLeaf) {
+                    // Sanity check
+                    if (i < stack.length - 1) {
+                        // leaf node must come last in proof
                         revert();
                     }
 
-                    if (i < stack.length - 1) {
-                        // not last level, must be Extension node
-
-                        if (!node[uint(stackIndexes[i])].isList()) {
-                            // rlp(child) was at least 32 bytes. node[1] contains
-                            // Keccak256(rlp(child)).
-                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toBytes());
-                        } else {
-                            // rlp(child) was at less than 32 bytes. node[1] contains
-                            // rlp(child).
-                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toRlpBytes());
-                        }
-                    } else {
-                        // last level, must be Leaf node
-
-                        if (mptPathOffset != mptPath.length) {
-                            // didn't consume entire mptPath
-                            revert();
-                        }
-
-                        rlpValue = node[uint(stackIndexes[i])];
-                        return rlpValue.toBytes();
+                    if (mptKeyOffset < mptKey.length) {
+                        return new bytes(0);
                     }
-                } else {
-                    // an extension/leaf node only has two fields.
-                    revert();
+
+                    rlpValue = node[1];
+                    return rlpValue.toBytes();
+                } else { // extension
+                    // Sanity check
+                    if (i == stack.length - 1) {
+                        // shouldn't be at last level
+                        revert();
+                    }
+
+                    if (!node[1].isList()) {
+                        // rlp(child) was at least 32 bytes. node[1] contains
+                        // Keccak256(rlp(child)).
+                        nodeHashHash = keccak256(node[1].toBytes());
+                    } else {
+                        // rlp(child) was at less than 32 bytes. node[1] contains
+                        // rlp(child).
+                        nodeHashHash = keccak256(node[1].toRlpBytes());
+                    }
                 }
             } else if (node.length == 17) {
                 // Branch node
 
-                if (stackIndexes[i] < 16) {
-                    // advance mptPathOffset
-                    if (mptPathOffset >= mptPath.length || mptPath[mptPathOffset] != stackIndexes[i]) {
+                if (mptKeyOffset != mptKey.length) {
+                    // we haven't consumed the entire path, so we need to look at a child
+                    uint8 nibble = uint8(mptKey[mptKeyOffset]);
+                    mptKeyOffset += 1;
+                    if (nibble >= 16) {
+                        // each element of the path has to be a nibble
                         revert();
                     }
-                    mptPathOffset += 1;
 
-                    if (i < stack.length - 1) {
-                        // not last level
-
-                        if (!node[uint(stackIndexes[i])].isList()) {
-                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toBytes());
-                        } else {
-                            nodeHashHash = keccak256(node[uint(stackIndexes[i])].toRlpBytes());
-                        }
-                    } else {
-                        // last level
-
-                        if (node[uint(stackIndexes[i])].toBytes().length != 0) {
-                            // hash isn't empty, but should be since this a proof
-                            // of exclusion: we're at the last level of the proof
-                            // and the stack index points to one of the child nodes
-                            // rather than a value
-                            revert();
-                        }
-
-                        if (mptPathOffset != mptPath.length) {
-                            // didn't consume entire mptPath
+                    if (isEmptyBytesequence(node[nibble])) {
+                        // Sanity
+                        if (i != stack.length - 1) {
+                            // leaf node should be at last level
                             revert();
                         }
 
                         return new bytes(0);
+                    } else if (!node[nibble].isList()) {
+                        nodeHashHash = keccak256(node[nibble].toBytes());
+                    } else {
+                        nodeHashHash = keccak256(node[nibble].toRlpBytes());
                     }
-                } else if (stackIndexes[i] == 16) { // we want the value stored in this node
-                    if (i < stack.length - 1) {
-                        // value must come last in proof
-                        revert();
-                    }
-
-                    if (mptPathOffset != mptPath.length) {
-                        // didn't consume entire mptPath
-                        revert();
-                    }
-
-                    rlpValue = node[uint(stackIndexes[i])];
-                    return rlpValue.toBytes();
                 } else {
-                    // index cannot be greater than 16
-                    revert();
+                    // we have consumed the entire mptKey, so we need to look at what's contained in this node.
+
+                    // Sanity
+                    if (i != stack.length - 1) {
+                        // should be at last level
+                        revert();
+                    }
+
+                    return node[16].toBytes();
                 }
-            } else {
-                revert(); // This should never happen as we have
-                          // already authenticated node at this point.
             }
         }
-
-        // We should never reach this point.
-        revert();
     }
 }
