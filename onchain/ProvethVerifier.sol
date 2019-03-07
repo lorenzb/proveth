@@ -282,8 +282,6 @@ contract ProvethVerifier {
         bytes mptKey,
         RLPReader.RLPItem[] memory stack
     ) internal pure returns (bytes memory value) {
-        // require(stackIndexes.length == stack.length);
-
         uint mptKeyOffset = 0;
 
         bytes32 nodeHashHash;
