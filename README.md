@@ -2,6 +2,7 @@
 
 [![Build Status](https://travis-ci.org/lorenzb/proveth.svg?branch=master)](https://travis-ci.org/lorenzb/proveth)
 ![Python >= 3.6](https://img.shields.io/badge/python-%3E%3D%203.6-blue.svg)
+![Solidity >= 0.5.0](https://img.shields.io/badge/solidity-%3E%3D%200.5.0-blue.svg)
 
 Ethereum's design [makes heavy use](https://blog.ethereum.org/2015/11/15/merkling-in-ethereum/) of [Merkle trees](https://en.wikipedia.org/wiki/Merkle_tree) enabling *light clients* to interact with the blockchain without having to download full blocks or its complete state.
 
