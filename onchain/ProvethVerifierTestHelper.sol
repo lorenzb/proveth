@@ -1,4 +1,4 @@
-pragma solidity ^0.4.11;
+pragma solidity ^0.5.0;
 
 import "./ProvethVerifier.sol";
 
@@ -10,71 +10,82 @@ import "./ProvethVerifier.sol";
 // *************************************************************
 contract ProvethVerifierTestHelper is ProvethVerifier {
 
-    function exposedDecodeUnsignedTx(bytes rlpUnsignedTx) returns (
+    function exposedDecodeUnsignedTx(bytes calldata rlpUnsignedTx) external pure returns (
         uint256 nonce,
         uint256 gasprice,
         uint256 startgas,
         address to,
         uint256 value,
-        bytes data,
+        bytes memory data,
         bool isContractCreation
     ) {
         UnsignedTransaction memory tx = decodeUnsignedTx(rlpUnsignedTx);
-        nonce = tx.nonce;
-        gasprice = tx.gasprice;
-        startgas = tx.startgas;
-        to = tx.to;
-        value = tx.value;
-        data = tx.data;
-        isContractCreation = tx.isContractCreation;
-        return;
+        return (
+            tx.nonce,
+            tx.gasprice,
+            tx.startgas,
+            tx.to,
+            tx.value,
+            tx.data,
+            tx.isContractCreation
+        );
     }
 
-    function exposedDecodeSignedTx(bytes rlpSignedTx) returns (
+    function exposedDecodeSignedTx(bytes calldata rlpSignedTx) external pure returns (
         uint256 nonce,
         uint256 gasprice,
         uint256 startgas,
         address to,
         uint256 value,
-        bytes data,
+        bytes memory data,
         uint256 v,
         uint256 r,
         uint256 s,
         bool isContractCreation
     ) {
         SignedTransaction memory tx = decodeSignedTx(rlpSignedTx);
-        nonce = tx.nonce;
-        gasprice = tx.gasprice;
-        startgas = tx.startgas;
-        to = tx.to;
-        value = tx.value;
-        data = tx.data;
-        v = tx.v;
-        r = tx.r;
-        s = tx.s;
-        isContractCreation = tx.isContractCreation;
-        return;
+        return (
+            tx.nonce,
+            tx.gasprice,
+            tx.startgas,
+            tx.to,
+            tx.value,
+            tx.data,
+            tx.v,
+            tx.r,
+            tx.s,
+            tx.isContractCreation
+        );
     }
 
 
-    function exposedMerklePatriciaCompactDecode(bytes compact) returns (bool isLeaf, bytes nibbles) {
+    function exposedMerklePatriciaCompactDecode(
+        bytes calldata compact
+    ) external pure returns (
+        bool isLeaf,
+        bytes memory nibbles
+    ) {
         return merklePatriciaCompactDecode(compact);
     }
 
     function exposedValidateMPTProof(
         bytes32 rootHash,
-        bytes mptPath,
-        bytes rlpStack
-    ) returns (bytes value) {
-        bytes memory memValue;
-        memValue = validateMPTProof(
+        bytes calldata mptPath,
+        bytes calldata rlpStack
+    ) external pure returns (
+        bytes memory value
+    ) {
+        return validateMPTProof(
             rootHash,
             mptPath,
             RLPReader.toList(RLPReader.toRlpItem(rlpStack)));
-        return memValue;
     }
 
-    function exposedSharedPrefixLength(uint xsOffset, bytes xs, bytes ys) returns (uint) {
+    function exposedSharedPrefixLength(
+        uint xsOffset,
+        bytes calldata xs,
+        bytes calldata ys
+    ) external pure returns (uint) {
         return sharedPrefixLength(xsOffset, xs, ys);
     }
 }

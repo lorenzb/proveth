@@ -1,4 +1,4 @@
-pragma solidity ^0.4.11;
+pragma solidity ^0.5.0;
 
 import "./Solidity-RLP/contracts/RLPReader.sol";
 
@@ -56,7 +56,7 @@ contract ProvethVerifier {
     }
 
 
-    function decodeUnsignedTx(bytes rlpUnsignedTx) internal pure returns (UnsignedTransaction memory t) {
+    function decodeUnsignedTx(bytes memory rlpUnsignedTx) internal pure returns (UnsignedTransaction memory t) {
         RLPReader.RLPItem[] memory fields = rlpUnsignedTx.toRlpItem().toList();
         require(fields.length == 6);
         address potentialAddress;
@@ -79,7 +79,7 @@ contract ProvethVerifier {
         );
     }
 
-    function decodeSignedTx(bytes rlpSignedTx) internal pure returns (SignedTransaction memory t) {
+    function decodeSignedTx(bytes memory rlpSignedTx) internal pure returns (SignedTransaction memory t) {
         RLPReader.RLPItem[] memory fields = rlpSignedTx.toRlpItem().toList();
         address potentialAddress;
         bool isContractCreation;
@@ -104,7 +104,7 @@ contract ProvethVerifier {
         );
     }
 
-    function decodeNibbles(bytes compact, uint skipNibbles) internal pure returns (bytes memory nibbles) {
+    function decodeNibbles(bytes memory compact, uint skipNibbles) internal pure returns (bytes memory nibbles) {
         require(compact.length > 0);
 
         uint length = compact.length * 2;
@@ -126,7 +126,7 @@ contract ProvethVerifier {
         assert(nibblesLength == nibbles.length);
     }
 
-    function merklePatriciaCompactDecode(bytes compact) internal pure returns (bool isLeaf, bytes memory nibbles) {
+    function merklePatriciaCompactDecode(bytes memory compact) internal pure returns (bool isLeaf, bytes memory nibbles) {
         require(compact.length > 0);
         uint first_nibble = uint8(compact[0]) >> 4 & 0xF;
         uint skipNibbles;
@@ -149,8 +149,9 @@ contract ProvethVerifier {
         return (isLeaf, decodeNibbles(compact, skipNibbles));
     }
 
-    function sharedPrefixLength(uint xsOffset, bytes xs, bytes ys) internal pure returns (uint) {
-        for (uint i = 0; i + xsOffset < xs.length && i < ys.length; i++) {
+    function sharedPrefixLength(uint xsOffset, bytes memory xs, bytes memory ys) internal pure returns (uint) {
+        uint i;
+        for (i = 0; i + xsOffset < xs.length && i < ys.length; i++) {
             if (xs[i + xsOffset] != ys[i]) {
                 return i;
             }
@@ -168,7 +169,7 @@ contract ProvethVerifier {
         RLPReader.RLPItem[] stack;
     }
 
-    function decodeProofBlob(bytes proofBlob) internal pure returns (Proof memory proof) {
+    function decodeProofBlob(bytes memory proofBlob) internal pure returns (Proof memory proof) {
         RLPReader.RLPItem[] memory proofFields = proofBlob.toRlpItem().toList();
         bytes memory rlpTxIndex = proofFields[2].toRlpBytes();
         proof = Proof(
@@ -187,7 +188,7 @@ contract ProvethVerifier {
 
     function txProof(
         bytes32 blockHash,
-        bytes proofBlob
+        bytes memory proofBlob
     ) public pure returns (
         uint8 result, // see TX_PROOF_RESULT_*
         uint256 index,
@@ -197,7 +198,7 @@ contract ProvethVerifier {
         address to, // 20 byte address for "regular" tx,
                     // empty for contract creation tx
         uint256 value,
-        bytes data,
+        bytes memory data,
         uint256 v,
         uint256 r,
         uint256 s,
@@ -219,7 +220,7 @@ contract ProvethVerifier {
 
     function validateTxProof(
         bytes32 blockHash,
-        bytes proofBlob
+        bytes memory proofBlob
     ) internal pure returns (uint8 result, uint256 index, SignedTransaction memory t) {
         result = 0;
         index = 0;
@@ -237,14 +238,17 @@ contract ProvethVerifier {
 
         if (rlpTx.length == 0) {
             // empty node
-            result = TX_PROOF_RESULT_ABSENT;
-            index = proof.txIndex;
-            return;
+            return (
+                TX_PROOF_RESULT_ABSENT,
+                proof.txIndex,
+                t
+            );
         } else {
-            result = TX_PROOF_RESULT_PRESENT;
-            index = proof.txIndex;
-            t  = decodeSignedTx(rlpTx);
-            return;
+            return (
+                TX_PROOF_RESULT_PRESENT,
+                proof.txIndex,
+                decodeSignedTx(rlpTx)
+            );
         }
     }
 
@@ -279,7 +283,7 @@ contract ProvethVerifier {
     ///         a proof of exclusion
     function validateMPTProof(
         bytes32 rootHash,
-        bytes mptKey,
+        bytes memory mptKey,
         RLPReader.RLPItem[] memory stack
     ) internal pure returns (bytes memory value) {
         uint mptKeyOffset = 0;
