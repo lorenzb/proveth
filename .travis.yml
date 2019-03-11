@@ -5,11 +5,8 @@ services:
 
 before_install:
   - docker pull lorenzb/proveth@sha256:ee97834552c1b2657a7a2d1b5d741a729a41077b09efbe695a0e914078104465
-  - docker inspect -f 'Docker container created: {{ .Created }}' lorenzb/proveth
-  - docker inspect -f 'Docker container tags: {{ .RepoTags }}' lorenzb/proveth
 
 script:
   - ls
   - pwd
   - docker run -v $PWD:/repo lorenzb/proveth bash -c "cp -r /repo /repo2  && cd /repo2/ && python3.6 -m pip install -r requirements.txt && python3.6 onchain/test/test_ProvethVerifier.py"
-
